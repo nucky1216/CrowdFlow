@@ -18,8 +18,23 @@ struct FFlowVoxel
 	FVector FlowDirection;
 
 	UPROPERTY(BlueprintReadOnly)
+	int32 Heat;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool flag;
+
+	UPROPERTY(BlueprintReadOnly)
 	bool bIsValid;
 };
+
+UENUM(BlueprintType)
+enum class EFlowFieldNeibourType : uint8
+	{
+		FaceNeibour,
+		EdgeNeibour,
+		VertNeibour
+};
+
 UCLASS()
 class CROWDFLOW_API AFlowFieldVoxelBuilder : public AActor
 {
@@ -36,6 +51,9 @@ public:
 	float VoxelSize = 100.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
+	TArray<FIntVector> IndexOffset;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	FVector TargetLocation;
 
 	UPROPERTY(BlueprintReadOnly)
@@ -43,6 +61,21 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	int32 SamplesPerTriangle = 3;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field")
+	float DebugDrawTime = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field")
+	int32 MaxDrawCount = 100;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field")
+	int32 DebugStart = 100;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field")
+	int32 DebugEnd = 100;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field")
+	EFlowFieldNeibourType NeibourType = EFlowFieldNeibourType::FaceNeibour;
 
 	UFUNCTION(CallInEditor, Category = "Flow Field")
 	void GenerateFlowField();
@@ -52,6 +85,11 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Flow Field")
 	FIntVector GetGridIndex(const FVector& Location) const;
+
+	UFUNCTION(BlueprintPure, Category = "Flow Field")
+	FVector SampleDirction(const FVector& Location) ;
+
+	void ConstructNeibourOffsets();
 
 protected:
 	// Called when the game starts or when spawned

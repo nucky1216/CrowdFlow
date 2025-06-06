@@ -32,7 +32,7 @@ public class CrowdFlow : ModuleRules
                 "CrowdFlowLibrary",
 				"Projects",
                 "NavigationSystem",
-				"NavMesh",
+				"Navmesh",
 				"InputCore"
 				// ... add other public dependencies that you statically link with here ...
 			}
