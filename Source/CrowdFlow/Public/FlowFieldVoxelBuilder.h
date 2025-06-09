@@ -27,6 +27,21 @@ struct FFlowVoxel
 	bool bIsValid;
 };
 
+USTRUCT(BlueprintType)
+struct FNavPolyFlow
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector Center;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector FlowDirection;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bIsValid;
+};
+
 UENUM(BlueprintType)
 enum class EFlowFieldNeibourType : uint8
 	{
@@ -59,6 +74,9 @@ public:
 	UPROPERTY(BlueprintReadOnly)
 	TMap<FIntVector, FFlowVoxel> FlowField;
 
+	//UPROPERTY(BlueprintReadOnly)
+	TMap<uint64, FNavPolyFlow> FlowFieldByPoly;
+
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	int32 SamplesPerTriangle = 3;
 
@@ -89,7 +107,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Flow Field")
 	FVector SampleDirction(const FVector& Location) ;
 
+
+
+
+
 	void ConstructNeibourOffsets();
+
+	UFUNCTION(CallInEditor, Category = "Flow Field|Poly")
+	void GenerateFlowFieldPoly();
+
+	UFUNCTION(CallInEditor, Category = "Flow Field|Poly")
+	void DebugDrawFlowFieldPoly();
+
+	UFUNCTION(BlueprintPure,Category="Flow Field|Poly")
+	FVector GetFlowByPoly(const FVector& Location, FVector ProjectExtent=FVector(50,50,50)) const;
 
 protected:
 	// Called when the game starts or when spawned
