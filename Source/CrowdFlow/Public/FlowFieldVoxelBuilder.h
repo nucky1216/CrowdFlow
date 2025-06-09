@@ -74,9 +74,6 @@ public:
 	UPROPERTY(BlueprintReadOnly)
 	TMap<FIntVector, FFlowVoxel> FlowField;
 
-	//UPROPERTY(BlueprintReadOnly)
-	TMap<uint64, FNavPolyFlow> FlowFieldByPoly;
-
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	int32 SamplesPerTriangle = 3;
 
@@ -107,11 +104,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Flow Field")
 	FVector SampleDirction(const FVector& Location) ;
 
-
-
-
-
 	void ConstructNeibourOffsets();
+
+	TMap<uint64, FNavPolyFlow> FlowFieldByPoly;
 
 	UFUNCTION(CallInEditor, Category = "Flow Field|Poly")
 	void GenerateFlowFieldPoly();

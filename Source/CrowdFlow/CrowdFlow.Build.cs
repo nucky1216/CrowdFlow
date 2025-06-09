@@ -33,7 +33,10 @@ public class CrowdFlow : ModuleRules
 				"Projects",
                 "NavigationSystem",
 				"Navmesh",
-				"InputCore"
+				"InputCore",
+				"StructUtils",
+				"MassEntity",
+				"MassSpawner"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
