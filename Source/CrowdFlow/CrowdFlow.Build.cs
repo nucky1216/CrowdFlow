@@ -36,7 +36,11 @@ public class CrowdFlow : ModuleRules
 				"InputCore",
 				"StructUtils",
 				"MassEntity",
-				"MassSpawner"
+				"MassSignals",
+				"MassAI",
+				"MassCommon",
+                "MassSpawner",
+				"MassMovement"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

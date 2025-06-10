@@ -10,7 +10,7 @@
 /**
  * 
  */
-class AFlowFieldVoxelBuilder;
+
 UCLASS()
 class CROWDFLOW_API UCrowdGenerator : public UMassEntitySpawnDataGeneratorBase
 {
@@ -21,9 +21,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crowd")
     AFlowFieldVoxelBuilder* FlowFieldBuilder;
 
-    // 生成点类型
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crowd")
-    int32 PolyIndex = 0;
 
 
     virtual void Generate(UObject& QueryOwner, TConstArrayView<FMassSpawnedEntityType> EntityTypes, int32 Count, FFinishedGeneratingSpawnDataSignature& FinishedGeneratingSpawnPointsDelegate) const override;

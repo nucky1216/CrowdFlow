@@ -7,7 +7,7 @@
 #include "NavMesh/RecastNavMesh.h"
 #include "NavMesh/NavMeshRenderingComponent.h"
 #include "DrawDebugHelpers.h"
-
+#include "FlowFieldSubsystem.h"
 #include "NavMesh/RecastHelpers.h"
 #include "Detour/DetourNavMesh.h"
 
@@ -18,6 +18,7 @@ AFlowFieldVoxelBuilder::AFlowFieldVoxelBuilder()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
     ConstructNeibourOffsets();
+    GenerateFlowFieldPoly();
 
 }
 
@@ -25,6 +26,11 @@ AFlowFieldVoxelBuilder::AFlowFieldVoxelBuilder()
 void AFlowFieldVoxelBuilder::BeginPlay()
 {
 	Super::BeginPlay();
+    GenerateFlowFieldPoly();
+    if (UFlowFieldSubsystem* Subsystem = GetWorld()->GetSubsystem<UFlowFieldSubsystem>())
+    {
+        Subsystem->SetFlowField(this);
+    }
 	
 }
 
@@ -238,6 +244,12 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector P
 	float TotalWeight = 0.0f;
     NeibourPolyRefs.Add(PolyRef);
 
+    if(NeibourPolyRefs.Num() == 1)
+    {
+		UE_LOG(LogTemp, Warning, TEXT("Location at Poly Center."));
+        return CurPolyFlow->FlowDirection;
+	}
+
     for(auto & NeibourPolyRef : NeibourPolyRefs)
     {
         const FNavPolyFlow* NeibourFlow = FlowFieldByPoly.Find(NeibourPolyRef);
@@ -248,7 +260,7 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector P
 			TotalWeight += weight;
         }
 	}
-
+    
     return FlowDirection/TotalWeight;
 }
 

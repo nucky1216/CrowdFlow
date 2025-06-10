@@ -115,7 +115,7 @@ public:
 	void DebugDrawFlowFieldPoly();
 
 	UFUNCTION(BlueprintPure,Category="Flow Field|Poly")
-	FVector GetFlowByPoly(const FVector& Location, FVector ProjectExtent=FVector(50,50,50)) const;
+	FVector GetFlowByPoly(const FVector& Location, FVector ProjectExtent=FVector(50,50,200)) const;
 
 protected:
 	// Called when the game starts or when spawned
