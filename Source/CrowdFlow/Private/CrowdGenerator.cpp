@@ -2,6 +2,7 @@
 
 
 #include "CrowdGenerator.h"
+#include "Detour/DetourNavMesh.h"
 #include "MassSpawnLocationProcessor.h"
 
 void UCrowdGenerator::Generate(UObject& QueryOwner, 
@@ -26,7 +27,7 @@ void UCrowdGenerator::Generate(UObject& QueryOwner,
     BuildResultsFromEntityTypes(Count, EntityTypes, Results);
 
     // 获取生成点
-    TArray<uint64> SpawnedKey;
+    TArray<dtPolyRef> SpawnedKey;
     FlowFieldBuilder->FlowFieldByPoly.GenerateKeyArray(SpawnedKey);
 
     for (FMassEntitySpawnDataGeneratorResult& Result : Results)
@@ -36,10 +37,11 @@ void UCrowdGenerator::Generate(UObject& QueryOwner,
         FMassTransformsSpawnData& Transforms = Result.SpawnData.GetMutable<FMassTransformsSpawnData>();
 
         Transforms.Transforms.Reserve(Result.NumEntities);
-        for (int i = 0; i < Result.NumEntities; i++)
+        for (int i = 0; i < Result.NumEntities&& i<SpawnedKey.Num(); i++)
         {
             FTransform& Transform = Transforms.Transforms.AddDefaulted_GetRef();
-            FVector PolyCenter = FlowFieldBuilder->FlowFieldByPoly.Find(SpawnedKey[i])->Center;
+            FVector PolyCenter = FlowFieldBuilder->GetFlowCenter(SpawnedKey[i]);
+			UE_LOG(LogTemp, Log, TEXT("PolyCenter: %s"), *PolyCenter.ToString());
             Transform.SetLocation(PolyCenter);
         }
     }

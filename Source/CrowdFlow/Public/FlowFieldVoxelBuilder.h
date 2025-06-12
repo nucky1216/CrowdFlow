@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Detour/DetourNavMesh.h"
 #include "FlowFieldVoxelBuilder.generated.h"
 
 USTRUCT(BlueprintType)
@@ -106,7 +107,7 @@ public:
 
 	void ConstructNeibourOffsets();
 
-	TMap<uint64, FNavPolyFlow> FlowFieldByPoly;
+	TMap<dtPolyRef, FNavPolyFlow> FlowFieldByPoly;
 
 	UFUNCTION(CallInEditor, Category = "Flow Field|Poly")
 	void GenerateFlowFieldPoly();
@@ -117,6 +118,7 @@ public:
 	UFUNCTION(BlueprintPure,Category="Flow Field|Poly")
 	FVector GetFlowByPoly(const FVector& Location, FVector ProjectExtent=FVector(50,50,200)) const;
 
+	FVector GetFlowCenter(dtPolyRef PolyRef) const;
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

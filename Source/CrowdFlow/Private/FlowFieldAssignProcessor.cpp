@@ -17,6 +17,7 @@ UFlowFieldAssignProcessor::UFlowFieldAssignProcessor():EntityQuery(*this)
 void UFlowFieldAssignProcessor::ConfigureQueries()
 {
     EntityQuery.AddRequirement<FFlowFieldFragment>(EMassFragmentAccess::ReadWrite);
+    EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 }
 
 void UFlowFieldAssignProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
@@ -39,9 +40,12 @@ void UFlowFieldAssignProcessor::Execute(FMassEntityManager& EntityManager, FMass
     EntityQuery.ForEachEntityChunk(EntityManager, Context, [&](FMassExecutionContext& Context)
         {
             const TArrayView<FFlowFieldFragment> FlowFieldRefs = Context.GetMutableFragmentView<FFlowFieldFragment>();
-            for (FFlowFieldFragment& Ref : FlowFieldRefs)
+			const TArrayView<FTransformFragment> TransformRefs = Context.GetMutableFragmentView<FTransformFragment>();
+            for (int i =0;i<Context.GetNumEntities();i++)
             {
-                Ref.FlowField = FlowField;
+                FlowFieldRefs[i].FlowField = FlowField;
+				FVector Location = TransformRefs[i].GetTransform().GetLocation();
+				UE_LOG(LogTemp, Log, TEXT("Assigning FlowField to entity at location: %d->%s"),i, *Location.ToString());
             }
         });
 }

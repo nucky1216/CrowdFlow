@@ -9,7 +9,6 @@
 #include "DrawDebugHelpers.h"
 #include "FlowFieldSubsystem.h"
 #include "NavMesh/RecastHelpers.h"
-#include "Detour/DetourNavMesh.h"
 
 
 // Sets default values
@@ -43,6 +42,7 @@ void AFlowFieldVoxelBuilder::Tick(float DeltaTime)
 void AFlowFieldVoxelBuilder::OnConstruction(const FTransform& Transform)
 {
     GenerateFlowFieldPoly();
+    ConstructNeibourOffsets();
 }
 
 FIntVector AFlowFieldVoxelBuilder::GetGridIndex(const FVector& Location) const
@@ -172,10 +172,16 @@ void AFlowFieldVoxelBuilder::DebugDrawFlowFieldPoly()
 
 FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector ProjectExtent ) const
 {
+    if (Location.ContainsNaN())
+    {
+		UE_LOG(LogTemp, Warning, TEXT("Location contains NaN! Location: %s"), *Location.ToString());
+        return FVector::ZeroVector;
+    }
     UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(GetWorld());
     if (!NavSys)
     {
 		UE_LOG(LogTemp, Warning, TEXT("Navigation System not found!"));
+        return FVector::ZeroVector;
     }
     const ARecastNavMesh* RecastNavMesh = Cast<ARecastNavMesh>(NavSys->GetMainNavData());
     if (!RecastNavMesh) return FVector::ZeroVector;
@@ -199,7 +205,7 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector P
 		return FVector::ZeroVector;
     }
 
-	TArray<uint64> NeibourPolyRefs;
+	TArray<dtPolyRef> NeibourPolyRefs;
     const dtMeshTile* Tile = nullptr;
     const dtPoly* Poly = nullptr;
 
@@ -249,19 +255,30 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector P
 		UE_LOG(LogTemp, Warning, TEXT("Location at Poly Center."));
         return CurPolyFlow->FlowDirection;
 	}
-
+  
     for(auto & NeibourPolyRef : NeibourPolyRefs)
     {
         const FNavPolyFlow* NeibourFlow = FlowFieldByPoly.Find(NeibourPolyRef);
         if (NeibourFlow && NeibourFlow->bIsValid)
         {
-			float weight = 1/FVector::Dist(Location, NeibourFlow->Center);
+			float weight = FMath::Clamp(1/FVector::Dist(Location, NeibourFlow->Center),0.0001,1);
             FlowDirection += weight*NeibourFlow->FlowDirection;
 			TotalWeight += weight;
         }
 	}
-    
+    //UE_LOG(LogTemp, Log, TEXT("CurWeight:%f ,NeiboursNum:%d"),TotalWeight, NeibourPolyRefs.Num());
     return FlowDirection/TotalWeight;
+}
+
+FVector AFlowFieldVoxelBuilder::GetFlowCenter(dtPolyRef PolyRef) const
+{
+	const FNavPolyFlow* Flow = FlowFieldByPoly.Find(PolyRef);
+    if (Flow && Flow->bIsValid)
+    {
+		return Flow->Center;
+    }
+	UE_LOG(LogTemp, Warning, TEXT("PolyRef not found or invalid! PolyRef: %u"), PolyRef);
+    return FVector::ZeroVector;
 }
 
 void AFlowFieldVoxelBuilder::ConstructNeibourOffsets()
@@ -418,11 +435,11 @@ void AFlowFieldVoxelBuilder::DebugDrawFlowField()
     for (int32 i=DebugStart;i<num&&i<DebugEnd&&i>=0;i++)
     {
         count++;
-        if (count > MaxDrawCount)
-        {
-            UE_LOG(LogTemp, Log, TEXT("Too Much Draw.Total Count:%d MaxCountSet:%d"),FlowField.Num(),MaxDrawCount);
-            break;
-        }
+        //if (count > MaxDrawCount)
+        //{
+        //    UE_LOG(LogTemp, Log, TEXT("Too Much Draw.Total Count:%d MaxCountSet:%d"),FlowField.Num(),MaxDrawCount);
+        //    break;
+        //}
         const FFlowVoxel* Voxel = FlowField.Find(KeyValue[i]);
         if (Voxel)
         {

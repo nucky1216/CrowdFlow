@@ -11,4 +11,11 @@ struct CROWDFLOW_API FFlowFieldFragment : public FMassFragment
     GENERATED_BODY()
 
     AFlowFieldVoxelBuilder* FlowField = nullptr;
+
+    UPROPERTY(EditAnywhere,Category="Force")
+	float ForceIntensity = 300.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Force")
+	float ForceWeight = 0.1;
+
 };

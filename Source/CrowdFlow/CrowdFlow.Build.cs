@@ -37,7 +37,7 @@ public class CrowdFlow : ModuleRules
 				"StructUtils",
 				"MassEntity",
 				"MassSignals",
-				"MassAI",
+				"MassNavigation",
 				"MassCommon",
                 "MassSpawner",
 				"MassMovement"
