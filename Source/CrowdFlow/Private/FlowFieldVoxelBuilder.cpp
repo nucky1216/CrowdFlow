@@ -107,47 +107,87 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
             const dtPoly* Poly = &Tile->polys[j];
             if (Poly->getType() != DT_POLYTYPE_GROUND) continue;
 
-            dtPolyRef PolyRef = DetourMesh->encodePolyId(Tile->salt, i,j);
+            dtPolyRef PolyRef = DetourMesh->encodePolyId(Tile->salt, i, j);
 
-            // 计算多边形中心
-            FVector Center = FVector::ZeroVector;
+
+            FNavPolyFlow Flow;
+            Flow.bIsValid = false;
+
+            // 获取多边形顶点，计算多边形中心
+			Flow.Center = FVector::ZeroVector;
             int32 VertCount = Poly->vertCount;
-			TArray<FVector> Vertices;
             for (int32 k = 0; k < VertCount; ++k)
             {
                 const dtReal* v = &Tile->verts[Poly->verts[k] * 3];
-                Center += FVector(-1.0*v[0], -1.0 * v[2], v[1]);
-                if(Vertices.Num() <=3)
-                {
-                    Vertices.Add(FVector(-1.0 * v[0], -1.0 * v[2], v[1]));
-				}
+                Flow.Center += FVector(-1.0 * v[0], -1.0 * v[2], v[1]);
+                Flow.PolyVerts.Add(FVector(-1.0 * v[0], -1.0 * v[2], v[1]));
 
-                DrawDebugPoint(GetWorld(), FVector(-1.0 * v[0],-1.0*v[2], v[1]), 5.0f, FColor::Blue, false, 5.0f);
+                if (Poly->neis[k] == 0)
+                    Flow.BoundaryEdge.Add(k);
+                
+                DrawDebugPoint(GetWorld(), FVector(-1.0 * v[0], -1.0 * v[2], v[1]), 5.0f, FColor::Blue, false, 5.0f);
             }
-            Center /= float(VertCount);
+            Flow.Center /= float(VertCount);
 
-            //GetPolyNormal
-			FVector PolyNormal = FVector::CrossProduct(Vertices[1]-Vertices[0],Vertices[2]-Vertices[1]).GetSafeNormal();
+            //多边形法线向量
+            Flow.PolyNormal = FVector::CrossProduct(Flow.PolyVerts[1] - Flow.PolyVerts[0], Flow.PolyVerts[2] - Flow.PolyVerts[1]).GetSafeNormal();
+
+           
+			//获取多边形的邻接多边形
+            if (DetourMesh->getTileAndPolyByRef(PolyRef, &Tile, &Poly) == DT_SUCCESS && Poly && Tile)
+            {
+                for (unsigned int index = 0; index < Poly->vertCount; ++index)
+                {
+                    dtPolyRef NeighborRef = 0;
+                    if (Poly->neis[index] & DT_EXT_LINK)
+                    {
+                        // 外部链接（跨Tile），需要遍历Tile的links
+                        unsigned int offMeshBase = static_cast<unsigned int>(Tile->header->offMeshBase);
+                        unsigned int offMeshConCount = static_cast<unsigned int>(Tile->header->offMeshConCount);
+                        for (unsigned int j_index = Tile->header->offMeshBase; j_index < (offMeshBase + offMeshConCount); ++j_index)
+                        {
+                            const dtLink& link = Tile->links[j_index];
+                            if (link.edge == index)
+                            {
+                                NeighborRef = link.ref;
+                                break;
+                            }
+                        }
+                    }
+                    else if (Poly->neis[index])
+                    {
+                        // 内部链接
+                        unsigned int neiIndex = Poly->neis[index] - 1;
+                        NeighborRef = DetourMesh->encodePolyId(Tile->salt, DetourMesh->getTileIndex(Tile), neiIndex);
+                    }
+
+                    if (NeighborRef != 0)
+                    {
+                        // 这里就是邻接多边形的 PolyRef
+                        Flow.Neibours.Add(NeighborRef);
+                    }
+                }
+            }
 
             FNavLocation NavLoc;
-            if (!NavSys->ProjectPointToNavigation(Center, NavLoc)) continue;
+            if (!NavSys->ProjectPointToNavigation(Flow.Center, NavLoc))
+            {
+				UE_LOG(LogTemp, Warning, TEXT("Failed to project poly center to navigation! Center: %s"), *Flow.Center.ToString());
+                continue;
+            }
+            UNavigationPath* Path = NavSys->FindPathToLocationSynchronously(GetWorld(), Flow.Center, TargetLocation);
 
-            UNavigationPath* Path = NavSys->FindPathToLocationSynchronously(GetWorld(), Center, TargetLocation);
-
-            FNavPolyFlow Flow;
-            Flow.Center = Center;
-            Flow.bIsValid = false;
-
+			//获取多边形中心点流向
             if (Path && Path->PathPoints.Num() >= 2)
             {
-                Flow.FlowDirection = FVector::VectorPlaneProject((Path->PathPoints[1] - Center),PolyNormal).GetSafeNormal();
+                Flow.FlowDirection = FVector::VectorPlaneProject((Path->PathPoints[1] - Flow.Center), Flow.PolyNormal).GetSafeNormal();
                 Flow.bIsValid = true;
             }
 
             FlowFieldByPoly.Add(PolyRef, Flow);
+            }
         }
     }
-}
 
 void AFlowFieldVoxelBuilder::DebugDrawFlowFieldPoly()
 {
@@ -170,7 +210,7 @@ void AFlowFieldVoxelBuilder::DebugDrawFlowFieldPoly()
     }
 }
 
-FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector ProjectExtent ) const
+FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, float step,FVector ProjectExtent ) const
 {
     if (Location.ContainsNaN())
     {
@@ -183,11 +223,6 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector P
 		UE_LOG(LogTemp, Warning, TEXT("Navigation System not found!"));
         return FVector::ZeroVector;
     }
-    const ARecastNavMesh* RecastNavMesh = Cast<ARecastNavMesh>(NavSys->GetMainNavData());
-    if (!RecastNavMesh) return FVector::ZeroVector;
-
-    const dtNavMesh* DetourMesh = RecastNavMesh->GetRecastMesh();
-    if (!DetourMesh) return FVector::ZeroVector;
 
 	FNavLocation NavLocation;
 	
@@ -204,59 +239,18 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector P
         UE_LOG(LogTemp, Warning, TEXT("PolyRef not found in FlowFieldByPoly! PolyRef: %u"), PolyRef);
 		return FVector::ZeroVector;
     }
-
-	TArray<dtPolyRef> NeibourPolyRefs;
-    const dtMeshTile* Tile = nullptr;
-    const dtPoly* Poly = nullptr;
-
-    if (DetourMesh->getTileAndPolyByRef(PolyRef, &Tile, &Poly) == DT_SUCCESS && Poly && Tile)
-    {
-        for (unsigned int i = 0; i < Poly->vertCount; ++i)
-        {
-            dtPolyRef NeighborRef = 0;
-            if (Poly->neis[i] & DT_EXT_LINK)
-            {
-                // 外部链接（跨Tile），需要遍历Tile的links
-                unsigned int offMeshBase = static_cast<unsigned int>(Tile->header->offMeshBase);
-                unsigned int offMeshConCount = static_cast<unsigned int>(Tile->header->offMeshConCount);
-                for (unsigned int j = Tile->header->offMeshBase; j < (offMeshBase + offMeshConCount); ++j)
-                {
-                    const dtLink& link = Tile->links[j];
-                    if (link.edge == i)
-                    {
-                        NeighborRef = link.ref;
-                        break;
-                    }
-                }
-            }
-            else if (Poly->neis[i])
-            {
-                // 内部链接
-                unsigned int neiIndex = Poly->neis[i] - 1;
-                NeighborRef = DetourMesh->encodePolyId(Tile->salt, DetourMesh->getTileIndex(Tile), neiIndex);
-            }
-
-            if (NeighborRef != 0)
-            {
-                // 这里就是邻接多边形的 PolyRef
-                // 你可以收集或处理它
-				NeibourPolyRefs.Add(NeighborRef);
-            }
-        }
-    }
-
-    // 计算邻接多边形的平均流向
-	FVector FlowDirection = FVector(0,0,0);
-	float TotalWeight = 0.0f;
-    NeibourPolyRefs.Add(PolyRef);
-
-    if(NeibourPolyRefs.Num() == 1)
+	//位于中心的点或没有邻居多边形时，直接返回当前多边形的流向
+    if(CurPolyFlow->Neibours.Num() == 0||FVector::Distance(CurPolyFlow->Center,Location)<=0.001)
     {
 		UE_LOG(LogTemp, Warning, TEXT("Location at Poly Center."));
         return CurPolyFlow->FlowDirection;
 	}
   
-    for(auto & NeibourPolyRef : NeibourPolyRefs)
+    // 计算邻接多边形的平均流向
+    float TotalWeight = FMath::Clamp(1 / FVector::Dist(Location, CurPolyFlow->Center), 0.0001, 1);
+    FVector FlowDirection = TotalWeight*CurPolyFlow->FlowDirection;
+
+    for(auto & NeibourPolyRef : CurPolyFlow->Neibours)
     {
         const FNavPolyFlow* NeibourFlow = FlowFieldByPoly.Find(NeibourPolyRef);
         if (NeibourFlow && NeibourFlow->bIsValid)
@@ -266,8 +260,64 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector P
 			TotalWeight += weight;
         }
 	}
-    //UE_LOG(LogTemp, Log, TEXT("CurWeight:%f ,NeiboursNum:%d"),TotalWeight, NeibourPolyRefs.Num());
-    return FlowDirection/TotalWeight;
+    FlowDirection = (FlowDirection / TotalWeight).GetSafeNormal();
+
+    //边界检测
+    FVector TargetPos= Location + FlowDirection * step;
+    DrawDebugPoint(GetWorld(), TargetPos, 10.0f, FColor::Green, false, DebugDrawTime);
+    //新的方向加上步长得到的位置点不在边界内
+    if (!NavSys->ProjectPointToNavigation(TargetPos, NavLocation, FVector(1,1,ProjectExtent.Z)))
+    {
+        UE_LOG(LogTemp, Log, TEXT("Add RepelStrength..."));
+		int32 VertCount = CurPolyFlow->PolyVerts.Num();
+        float MinDistSqr = FLT_MAX;
+        FVector ClosestPoint, EdgeNormal;
+
+        for (int32 i = 0; i < VertCount; ++i)
+        {
+
+            FVector P0=CurPolyFlow->PolyVerts[i];
+            FVector P1=CurPolyFlow->PolyVerts[(i+1)%VertCount];
+            FVector P2 = CurPolyFlow->PolyVerts[(i + 2) % VertCount];
+
+            // 计算TargetPos到边的最近点
+            FVector Edge = P1 - P0;
+            float t = FVector::DotProduct(TargetPos - P0, Edge) / Edge.SizeSquared();
+            t = FMath::Clamp(t, 0.0f, 1.0f);
+            FVector Projection = P0 + t * Edge;
+
+            float DistSqr = FVector::DistSquared(TargetPos, Projection);
+            if (DistSqr < MinDistSqr)
+            {
+                MinDistSqr = DistSqr;
+                ClosestPoint = Projection;
+                // 计算边的法线（假设多边形为平面，法线可用多边形法线叉边向量）
+                FVector PolyNormal = FVector::CrossProduct(
+                    P1 - P0,
+                    P2-P1 
+                ).GetSafeNormal();
+                EdgeNormal = FVector::CrossProduct(Edge, PolyNormal).GetSafeNormal();
+                DrawDebugDirectionalArrow(GetWorld(),(P0+P1)/2, (P0 + P1) / 2+EdgeNormal*200
+                    ,30,FColor::Black, false,DebugDrawTime,0,5);
+            }
+        }
+
+        // 3. 施加反向矢量
+        float Dist = FMath::Sqrt(MinDistSqr);
+        float CenterDist = FVector::Distance(CurPolyFlow->Center, TargetPos);
+        float WeightDist = CenterDist / Dist; // 距离越近，反作用越大
+        FVector RepelDir = -EdgeNormal * WeightDist;
+
+
+		float MinDist = 50.f; //距离阈值
+        // 4. 合成最终方向
+        FlowDirection = (FlowDirection* (CenterDist / MinDist) + RepelDir).GetSafeNormal();
+       
+
+    }
+
+
+    return FlowDirection;
 }
 
 FVector AFlowFieldVoxelBuilder::GetFlowCenter(dtPolyRef PolyRef) const

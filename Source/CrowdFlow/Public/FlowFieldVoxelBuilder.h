@@ -36,6 +36,17 @@ struct FNavPolyFlow
 	UPROPERTY(BlueprintReadOnly)
 	FVector Center;
 
+	TArray<dtPolyRef> Neibours;
+
+	UPROPERTY(BlueprintReadOnly)
+	TArray<FVector> PolyVerts;
+
+	UPROPERTY(BlueprintReadOnly)
+	TArray<int32> BoundaryEdge;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector PolyNormal;
+
 	UPROPERTY(BlueprintReadOnly)
 	FVector FlowDirection;
 
@@ -116,7 +127,7 @@ public:
 	void DebugDrawFlowFieldPoly();
 
 	UFUNCTION(BlueprintPure,Category="Flow Field|Poly")
-	FVector GetFlowByPoly(const FVector& Location, FVector ProjectExtent=FVector(50,50,200)) const;
+	FVector GetFlowByPoly(const FVector& Location, float step, FVector ProjectExtent=FVector(50,50,200)) const;
 
 	FVector GetFlowCenter(dtPolyRef PolyRef) const;
 protected:
