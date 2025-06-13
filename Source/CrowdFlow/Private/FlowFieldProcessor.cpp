@@ -67,13 +67,12 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                     UE_LOG(LogTemp, Warning, TEXT("FlowField is null for entity %d"), i);
                     continue;  // 如果流场为空，跳过此实体
 				}
-                FVector Dir = FlowField->GetFlowByPoly(Position,50);  // 获取流场方向
+                FVector Dir = FlowField->GetFlowByPoly(Position);  // 获取流场方向
                 UE_LOG(LogTemp,Log,TEXT("Index:%d Dir:%s SamplePos:%s,KeyNum:%d,ForceIntensity:%f"),
                     i,*Dir.ToString(),*Position.ToString(),FlowField->FlowFieldByPoly.Num(), ForceIntensity);
                 //MoveTarget.Center = Position + Dir * ForceIntensity;  // 设置移动目标位置
 				//MoveTarget.Forward = Dir.GetSafeNormal();  // 设置移动目标方向
 
-              
 				Vels[i].Value = Dir * ForceIntensity;  // 施加流场方向的力，数值可调
             }
         });

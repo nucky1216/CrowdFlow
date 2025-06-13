@@ -45,7 +45,7 @@ struct FNavPolyFlow
 	TArray<int32> BoundaryEdge;
 
 	UPROPERTY(BlueprintReadOnly)
-	FVector PolyNormal;
+	TArray<FVector> BoundaryEdgeNormal;
 
 	UPROPERTY(BlueprintReadOnly)
 	FVector FlowDirection;
@@ -87,7 +87,7 @@ public:
 	TMap<FIntVector, FFlowVoxel> FlowField;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
-	int32 SamplesPerTriangle = 3;
+	float AgentRadius = 100.f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	float DebugDrawTime = 10.0f;
@@ -126,8 +126,11 @@ public:
 	UFUNCTION(CallInEditor, Category = "Flow Field|Poly")
 	void DebugDrawFlowFieldPoly();
 
+	UFUNCTION(BlueprintPure,Category="Flow Field| Poly")
+	void  GetFlowPoly(TArray<FNavPolyFlow>& Polys) const {  FlowFieldByPoly.GenerateValueArray(Polys); } ;
+
 	UFUNCTION(BlueprintPure,Category="Flow Field|Poly")
-	FVector GetFlowByPoly(const FVector& Location, float step, FVector ProjectExtent=FVector(50,50,200)) const;
+	FVector GetFlowByPoly(const FVector& Location,  FVector ProjectExtent=FVector(50,50,200)) const;
 
 	FVector GetFlowCenter(dtPolyRef PolyRef) const;
 protected:
