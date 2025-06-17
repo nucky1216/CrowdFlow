@@ -45,6 +45,9 @@ struct FNavPolyFlow
 	TArray<int32> BoundaryEdge;
 
 	UPROPERTY(BlueprintReadOnly)
+	FVector PolyNormal;
+
+	UPROPERTY(BlueprintReadOnly)
 	TArray<FVector> BoundaryEdgeNormal;
 
 	UPROPERTY(BlueprintReadOnly)
@@ -61,6 +64,8 @@ enum class EFlowFieldNeibourType : uint8
 		EdgeNeibour,
 		VertNeibour
 };
+
+
 
 UCLASS()
 class CROWDFLOW_API AFlowFieldVoxelBuilder : public AActor
@@ -91,6 +96,18 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	float DebugDrawTime = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float DesiredForceStrength = 100.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float GuidanceForceStrength = 50.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float RepelForceStrength = 100.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float PlaneForceStrength = 100.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	int32 MaxDrawCount = 100;
@@ -130,7 +147,7 @@ public:
 	void  GetFlowPoly(TArray<FNavPolyFlow>& Polys) const {  FlowFieldByPoly.GenerateValueArray(Polys); } ;
 
 	UFUNCTION(BlueprintPure,Category="Flow Field|Poly")
-	FVector GetFlowByPoly(const FVector& Location,  FVector ProjectExtent=FVector(50,50,200)) const;
+	FVector GetFlowByPoly(const FVector& Location, FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, FVector ProjectExtent=FVector(50,50,200)) const;
 
 	FVector GetFlowCenter(dtPolyRef PolyRef) const;
 protected:
