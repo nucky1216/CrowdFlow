@@ -315,52 +315,57 @@ void AFlowFieldVoxelBuilder::DebugDrawFlowFieldPoly()
     }
 }
 
-FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector& RepelForce, FVector& GuidanceForce,FVector& PlaneForce,FVector ProjectExtent ) const
+
+
+FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector CurVelocity, dtPolyRef& PolyRef,
+    FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, FVector ProjectExtent) 
 {
 
-	GuidanceForce = FVector::ZeroVector;
-	RepelForce = FVector::ZeroVector;
-	PlaneForce = FVector::ZeroVector;
+    GuidanceForce = FVector::ZeroVector;
+    RepelForce = FVector::ZeroVector;
+    PlaneForce = FVector::ZeroVector;
 
     if (Location.ContainsNaN())
     {
-		UE_LOG(LogTemp, Warning, TEXT("Location contains NaN! Location: %s"), *Location.ToString());
+        UE_LOG(LogTemp, Warning, TEXT("Location contains NaN! Location: %s"), *Location.ToString());
         return FVector::ZeroVector;
     }
     UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(GetWorld());
     if (!NavSys)
     {
-		UE_LOG(LogTemp, Warning, TEXT("Navigation System not found!"));
+        UE_LOG(LogTemp, Warning, TEXT("Navigation System not found!"));
         return FVector::ZeroVector;
     }
 
-	FNavLocation NavLocation;
-	
+    FNavLocation NavLocation;
+
     if (!NavSys->ProjectPointToNavigation(Location, NavLocation, ProjectExtent))
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to project point to navigation! Location: %s with Extent:%s"), *Location.ToString(), *ProjectExtent.ToString());
-		return FVector::ZeroVector;
+        //PlaneForce = FVector(0, 0, -CurVelocity.Z * SurfaceSpringK*10.f);
+        return PlaneForce;
     }
 
     dtPolyRef PolyRef = NavLocation.NodeRef;
-	const FNavPolyFlow* CurPolyFlow = FlowFieldByPoly.Find(PolyRef);
+    const FNavPolyFlow* CurPolyFlow = FlowFieldByPoly.Find(PolyRef);
+
     if (!CurPolyFlow)
     {
         UE_LOG(LogTemp, Warning, TEXT("PolyRef not found in FlowFieldByPoly! PolyRef: %u"), PolyRef);
-		return FVector::ZeroVector;
+        return FVector::ZeroVector;
     }
-	//位于中心的点或没有邻居多边形时，直接返回当前多边形的流向
-    if(CurPolyFlow->Neibours.Num() == 0||FVector::Distance(CurPolyFlow->Center,Location)<=0.001)
+    //位于中心的点或没有邻居多边形时，直接返回当前多边形的流向
+    if (CurPolyFlow->Neibours.Num() == 0 || FVector::Distance(CurPolyFlow->Center, Location) <= 0.001)
     {
-		UE_LOG(LogTemp, Warning, TEXT("Poly:%u Has No Neibours or Locate at Center"),PolyRef);
+        UE_LOG(LogTemp, Warning, TEXT("Poly:%u Has No Neibours or Locate at Center"), PolyRef);
         return CurPolyFlow->FlowDirection;
-	}
-  
-    FVector FlowDirection = CurPolyFlow->FlowDirection*DesiredForceStrength;
+    }
+
+    FVector FlowDirection = CurPolyFlow->FlowDirection * DesiredForceStrength;
     // 计算邻接多边形的平均流向
-	//FVector GuidanceForce = FVector::ZeroVector;
+    //FVector GuidanceForce = FVector::ZeroVector;
     GuidanceForce = FVector::ZeroVector;
-    if(1)
+    if (1)
     {
         float TotalWeight = 0;
 
@@ -375,52 +380,86 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector& 
 
             }
         }
-        GuidanceForce = (GuidanceForce / TotalWeight)*GuidanceForceStrength;
+        GuidanceForce = (GuidanceForce / TotalWeight) * GuidanceForceStrength;
     }
 
     //边界检测
     //FVector TargetPos= Location + (FlowDirection + GuidanceForce).GetSafeNormal() * AgentRadius;
-    
-	int32 BoundaryCount = CurPolyFlow->BoundaryEdge.Num();
-    if (BoundaryCount!=0)
+
+    int32 BoundaryCount = CurPolyFlow->BoundaryEdge.Num();
+    if (BoundaryCount != 0)
     {
         //UE_LOG(LogTemp, Log, TEXT("Add RepelStrength...has %d Boundary"),BoundaryCount);
 
-		float DistToBoundary=1.0;
-		FVector EdgeNormal = FVector::ZeroVector;
+        float DistToBoundary = 1.0;
+        FVector EdgeNormal = FVector::ZeroVector;
         for (int32 k = 0; k < BoundaryCount; k++)
         {
             int32 EdgeIndex = CurPolyFlow->BoundaryEdge[k];
             FVector Start = CurPolyFlow->PolyVerts[EdgeIndex];
             FVector End = CurPolyFlow->PolyVerts[(EdgeIndex + 1) % CurPolyFlow->PolyVerts.Num()];
 
-			FVector intersectionPoint;
+            FVector intersectionPoint;
             //FMath::SegmentTriangleIntersection(Start, End, Location);
-            if (IsSegmentInOrIntersectCircle2D(Start,End,Location,AgentRadius))
+            if (IsSegmentInOrIntersectCircle2D(Start, End, Location, AgentRadius))
             {
-                DistToBoundary = FMath::PointDistToSegment(Location,Start,End);
-				EdgeNormal = CurPolyFlow->BoundaryEdgeNormal[k];
+                DistToBoundary = FMath::PointDistToSegment(Location, Start, End);
+                EdgeNormal = CurPolyFlow->BoundaryEdgeNormal[k];
                 break;
             }
         }
 
         // 3. 施加反向矢量
-        float WeightDist = RepelForceStrength/ DistToBoundary; // 距离越近，反作用越大
+        float WeightDist = RepelForceStrength / DistToBoundary; // 距离越近，反作用越大
         RepelForce = EdgeNormal * WeightDist;
         //UE_LOG(LogTemp, Log, TEXT("DistToBoundary: %f, WeightDist: %f RepelForce:%s"), DistToBoundary, WeightDist, *RepelForce.ToString());
-         
+
 
     }
-    
-    FVector TempForce = FlowDirection + GuidanceForce + RepelForce;
- //   //垂直修正力检测
- //   float VerticalComponent = FVector::DotProduct(TempForce, CurPolyFlow->PolyNormal);
- //   PlaneForce = VerticalComponent * CurPolyFlow->PolyNormal * PlaneForceStrength; // PlaneForceStrength可调节
-	//UE_LOG(LogTemp, Log, TEXT("VerticalComponent: %f, PlaneForce:%s"), VerticalComponent, *PlaneForce.ToString());
 
- //   FlowDirection = (FlowDirection + GuidanceForce + RepelForce + PlaneForce);
 
-    return TempForce;
+    //垂直修正力
+	float SignDistToPoly = FVector::PointPlaneDist(Location, CurPolyFlow->Center, CurPolyFlow->PolyNormal);
+    if (FMath::Abs(SignDistToPoly)>SurfaceHeightTolerance)
+    {
+        float SignDistToPlane = FVector::PointPlaneDist(Location, CurPolyFlow->Center, CurPolyFlow->PolyNormal);
+        PlaneForce = FVector::ZeroVector;
+
+        float PlaneForceZ = -SignDistToPlane * SurfaceSpringK;// +CurVelocity.Z * SurfaceSpringDampingC; // 距离越远，修正力越大
+        PlaneForce = PlaneForceZ * CurPolyFlow->PolyNormal; // 施加在多边形法线方向上的力
+        //PlaneForce = PlaneForce.GetClampedToMaxSize(SurfaceMaxForce); // 限制最大修正力
+		//UE_LOG(LogTemp, Log, TEXT("DistToPoly: %f, SignDistToPlane: %f,CurVelocity.Z:%f, PlaneForceZ: %f, PlaneForce:%s"), 
+        //    SignDistToPoly, SignDistToPlane, CurVelocity.Z, PlaneForceZ, *PlaneForce.ToString());
+    }
+
+
+
+    FlowDirection = (FlowDirection + GuidanceForce + RepelForce + PlaneForce);
+
+    return FlowDirection;
+}
+
+FVector AFlowFieldVoxelBuilder::DeltaMove(AActor* Agent, UPARAM(ref)FVector& Velocity, float MaxSpeed, float Mass)
+{
+
+    if (!Agent) return FVector::ZeroVector;
+
+    FVector RepelForce = FVector::ZeroVector;
+    FVector GuidanceForce = FVector::ZeroVector;
+    FVector PlaneForce = FVector::ZeroVector;
+
+    FVector AgentLocation = Agent->GetActorLocation();
+    float DeltaTime = GetWorld()->GetDeltaSeconds();
+
+    FVector FinalForce = GetFlowByPoly(AgentLocation, Velocity, RepelForce, GuidanceForce, PlaneForce, FVector(VoxelSize / 2.0f));
+
+    FVector Acceleration = FinalForce / Mass; // 使用质量来计算加速度
+    Velocity += Acceleration * DeltaTime; // 更新速度
+    Velocity = Velocity.GetClampedToSize(0, MaxSpeed); // 限制速度
+
+    FVector DeltaLocation = Velocity * DeltaTime; // 计算位移
+
+    return AgentLocation + DeltaLocation;
 }
 
 FVector AFlowFieldVoxelBuilder::GetFlowCenter(dtPolyRef PolyRef) const
@@ -432,6 +471,35 @@ FVector AFlowFieldVoxelBuilder::GetFlowCenter(dtPolyRef PolyRef) const
     }
 	UE_LOG(LogTemp, Warning, TEXT("PolyRef not found or invalid! PolyRef: %u"), PolyRef);
     return FVector::ZeroVector;
+}
+
+dtPolyRef AFlowFieldVoxelBuilder::GetPolyRef(const FVector& Location, FVector ProjectExtent) const
+{
+    if (Location.ContainsNaN())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Location contains NaN! Location: %s"), *Location.ToString());
+        return 0;
+    }
+    UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(GetWorld());
+    if (!NavSys)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Navigation System not found!"));
+        return 0;
+    }
+
+    FNavLocation NavLocation;
+
+    if (!NavSys->ProjectPointToNavigation(Location, NavLocation, ProjectExtent))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to project point to navigation! Location: %s with Extent:%s"), *Location.ToString(), *ProjectExtent.ToString());
+        //PlaneForce = FVector(0, 0, -CurVelocity.Z * SurfaceSpringK*10.f);
+        return 0;
+    }
+
+    dtPolyRef PolyRef = NavLocation.NodeRef;
+    const FNavPolyFlow* CurPolyFlow = FlowFieldByPoly.Find(PolyRef);
+
+    return PolyRef;
 }
 
 void AFlowFieldVoxelBuilder::ConstructNeibourOffsets()

@@ -12,10 +12,21 @@ struct CROWDFLOW_API FFlowFieldFragment : public FMassFragment
 
     AFlowFieldVoxelBuilder* FlowField = nullptr;
 
-    UPROPERTY(EditAnywhere,Category="Force")
-	float ForceIntensity = 300.0f;
+	dtPolyRef PolyRef=0;
 
-    UPROPERTY(EditAnywhere, Category = "Force")
-	float ForceWeight = 0.1;
+    UPROPERTY(EditAnywhere,Category="PolyFlow")
+	FVector ProjectExtent = FVector(50.0f, 50.0f, 50.0f);
+
+    UPROPERTY(EditAnywhere, Category = "PolyFlow")
+    int32 MaxSearchNeibourNum = 5;
+
+    UPROPERTY(EditAnywhere, Category = "Movement")
+	float ForceWeight = 0.1f;
+
+    UPROPERTY(EditAnywhere, Category = "Movement")
+	float MaxSpeed = 150.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Movement")
+    float Mass = 1.0f;
 
 };

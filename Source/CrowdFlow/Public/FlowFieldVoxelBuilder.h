@@ -109,6 +109,15 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
 	float PlaneForceStrength = 100.0f;
 
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force | PlaneForce")
+	float SurfaceHeightTolerance = 10.f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force | PlaneForce")
+	float SurfaceSpringK = 100.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force | PlaneForce")
+	float SurfaceSpringDampingC = 300.0f;
+
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	int32 MaxDrawCount = 100;
 
@@ -137,19 +146,24 @@ public:
 
 	TMap<dtPolyRef, FNavPolyFlow> FlowFieldByPoly;
 
-	UFUNCTION(CallInEditor, Category = "Flow Field|Poly")
+	UFUNCTION(CallInEditor, Category = "Flow Field | Poly")
 	void GenerateFlowFieldPoly();
 
-	UFUNCTION(CallInEditor, Category = "Flow Field|Poly")
+	UFUNCTION(CallInEditor, Category = "Flow Field | Poly")
 	void DebugDrawFlowFieldPoly();
 
-	UFUNCTION(BlueprintPure,Category="Flow Field| Poly")
+	UFUNCTION(BlueprintPure,Category="Flow Field | Poly")
 	void  GetFlowPoly(TArray<FNavPolyFlow>& Polys) const {  FlowFieldByPoly.GenerateValueArray(Polys); } ;
 
-	UFUNCTION(BlueprintPure,Category="Flow Field|Poly")
-	FVector GetFlowByPoly(const FVector& Location, FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, FVector ProjectExtent=FVector(50,50,200)) const;
+	UFUNCTION(BlueprintCallable, Category = "Flow Field | Poly")
+	FVector DeltaMove(AActor* Agent, UPARAM(ref) FVector& Velocity, float MaxSpeed=100.f, float Mass=1.f);
+
+	//UFUNCTION(BlueprintCallable,Category="Flow Field | Poly")
+	FVector GetFlowByPoly(const FVector& Location, FVector CurVelocity,dtPolyRef PolyRef, FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, FVector ProjectExtent=FVector(50,50,200));
 
 	FVector GetFlowCenter(dtPolyRef PolyRef) const;
+
+	dtPolyRef GetPolyRef(const FVector& Location, FVector ProjectExtent) const;
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

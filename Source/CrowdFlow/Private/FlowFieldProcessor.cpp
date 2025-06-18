@@ -6,7 +6,7 @@
 #include "Steering\MassSteeringFragments.h"
 #include "FlowFieldVoxelBuilder.h"
 #include "MassNavigationFragments.h"
-
+#include "FlowFieldNeiboursSubsystem.h"
 
 
 UFlowFieldProcessor::UFlowFieldProcessor():EntityQuery(*this)
@@ -35,11 +35,18 @@ void UFlowFieldProcessor::ConfigureQueries()
 void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
     UE_LOG(LogTemp, Log, TEXT("Process Running"));
-   
+    UFlowFieldNeiboursSubsystem* FlowFieldNeiboursSubsystem = UWorld::GetSubsystem<UFlowFieldNeiboursSubsystem>(Context.GetWorld());
+    if(!FlowFieldNeiboursSubsystem)
+    {
+       UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem is null"));
+       return;
+	}
 
     EntityQuery.ForEachEntityChunk(EntityManager, Context, [&](FMassExecutionContext& Context)
         {
             const int32 NumEntities = Context.GetNumEntities();
+			float DeltaTime = Context.GetDeltaTimeSeconds();
+            
 
             const TArrayView<FTransformFragment> Transforms = Context.GetMutableFragmentView<FTransformFragment>();
             //const TArrayView<FMassSteeringFragment> Steerings = Context.GetMutableFragmentView<FMassSteeringFragment>();
@@ -50,7 +57,9 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 
             for (int32 i = 0; i < NumEntities; ++i)
             {
+				FMassEntityHandle CurEntityHandle=Context.GetEntity(i);  // 获取实体句柄
                 FVector Position = Transforms[i].GetTransform().GetLocation();
+
                 if(Position.ContainsNaN())
                 {
                     UE_LOG(LogTemp, Warning, TEXT("Entity contain NaN position"), i);
@@ -59,21 +68,41 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 
                // FMassMoveTargetFragment MoveTarget=MoveTargets[i];
                 AFlowFieldVoxelBuilder* FlowField = FlowFields[i].FlowField;
-				float ForceIntensity = FlowFields[i].ForceIntensity;  // 获取力强度
-				float ForceWeight = FlowFields[i].ForceWeight;  // 获取力权重
+                float Mass = FlowFields[i].Mass; // 假设质量为1.0，实际应用中可以从实体中获取质量信息
+                float MaxSpeed = FlowFields[i].MaxSpeed;  // 获取最大速度
+                int32 MaxNeibourNum = FlowFields[i].MaxSearchNeibourNum;
+
 
                 if(!FlowField)
                 {
                     UE_LOG(LogTemp, Warning, TEXT("FlowField is null for entity %d"), i);
                     continue;  // 如果流场为空，跳过此实体
 				}
-                FVector Dir = FVector::Zero();//FlowField->GetFlowByPoly(Position);  // 获取流场方向
-                UE_LOG(LogTemp,Log,TEXT("Index:%d Dir:%s SamplePos:%s,KeyNum:%d,ForceIntensity:%f"),
-                    i,*Dir.ToString(),*Position.ToString(),FlowField->FlowFieldByPoly.Num(), ForceIntensity);
-                //MoveTarget.Center = Position + Dir * ForceIntensity;  // 设置移动目标位置
-				//MoveTarget.Forward = Dir.GetSafeNormal();  // 设置移动目标方向
 
-				Vels[i].Value = Dir * ForceIntensity;  // 施加流场方向的力，数值可调
+                FVector DebugGuidanceForce, DebugPlaneForce, DebugRepelForce;
+                dtPolyRef PolyRef=0;
+                FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value, PolyRef,
+                    DebugRepelForce,DebugGuidanceForce,DebugPlaneForce);  // 获取流场力
+
+
+
+
+                const float Radius = 500.f;
+
+				//找到实体周围的邻居
+                for(int32 i=0;i<MaxNeibourNum;i++)
+                {
+					const TArray<FMassEntityHandle>* Neibours = FlowFieldNeiboursSubsystem->GetPolyEntities(PolyRef);
+                    if(!Neibours || Neibours->Num() == 0)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("No neighbours found for entity %d with Handle:%u"), i, CurEntityHandle.AsNumber());
+                        break;  // 如果没有邻居，跳过此实体
+					}
+				}
+                
+
+				FVector Velocity=Vels[i].Value + FlowForce/Mass * DeltaTime;  // 施加流场方向的力，数值可调
+                Vels[i].Value= Velocity.GetClampedToSize(0, MaxSpeed);
             }
         });
 }
