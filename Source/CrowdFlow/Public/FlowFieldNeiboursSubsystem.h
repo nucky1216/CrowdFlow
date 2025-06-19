@@ -8,6 +8,7 @@
 #include "MassEntityTypes.h"
 #include "FlowFieldNeiboursSubsystem.generated.h"
 
+class AFlowFieldVoxelBuilder;
 /**
  * 
  */
@@ -18,13 +19,28 @@ class CROWDFLOW_API UFlowFieldNeiboursSubsystem : public UWorldSubsystem
 	
 public:
 	TMap<dtPolyRef, TArray<FMassEntityHandle>> PolyNeibours;
+	AFlowFieldVoxelBuilder* FlowFieldBuilder = nullptr;
 
 	void RegisterPolyEntity(dtPolyRef PolyRef,FMassEntityHandle Entity);
 
 	void UnregisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle Entity);
 
-	const TArray<FMassEntityHandle>* GetPolyEntities(dtPolyRef PolyRef) const;
+	void UpdatePolyEntity(dtPolyRef NewPolyRef,dtPolyRef OldPolyRef, FMassEntityHandle Entity);
 
+	TArray<FMassEntityHandle> GetPolyEntities(dtPolyRef PolyRef,int32 MaxNum) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Subsystem")
 	void ResetMap()	{		PolyNeibours.Reset();	}
+
+	UFUNCTION(BlueprintCallable, Category = "Subsystem")
+	void DebugMap();
+
+	UFUNCTION(BlueprintCallable, Category = "Subsystem")
+	void InitializeManual();
+
+
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	
 	
 };

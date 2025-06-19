@@ -81,7 +81,7 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 
                 FVector DebugGuidanceForce, DebugPlaneForce, DebugRepelForce;
                 dtPolyRef PolyRef=0;
-                FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value, PolyRef,
+                FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value,
                     DebugRepelForce,DebugGuidanceForce,DebugPlaneForce);  // 获取流场力
 
 
@@ -90,10 +90,10 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 const float Radius = 500.f;
 
 				//找到实体周围的邻居
-                for(int32 i=0;i<MaxNeibourNum;i++)
+                for(int32 j=0;j<MaxNeibourNum;j++)
                 {
-					const TArray<FMassEntityHandle>* Neibours = FlowFieldNeiboursSubsystem->GetPolyEntities(PolyRef);
-                    if(!Neibours || Neibours->Num() == 0)
+					TArray<FMassEntityHandle> Neibours = FlowFieldNeiboursSubsystem->GetPolyEntities(PolyRef,10);
+                    if(Neibours.Num() == 0)
                     {
                         UE_LOG(LogTemp, Warning, TEXT("No neighbours found for entity %d with Handle:%u"), i, CurEntityHandle.AsNumber());
                         break;  // 如果没有邻居，跳过此实体

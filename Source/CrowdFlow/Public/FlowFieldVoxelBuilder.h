@@ -5,7 +5,10 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Detour/DetourNavMesh.h"
+#include "MassEntityTypes.h"
+#include "EntityActor.h"
 #include "FlowFieldVoxelBuilder.generated.h"
+
 
 USTRUCT(BlueprintType)
 struct FFlowVoxel
@@ -55,6 +58,9 @@ struct FNavPolyFlow
 
 	UPROPERTY(BlueprintReadOnly)
 	bool bIsValid;
+
+	UPROPERTY(BlueprintReadOnly)
+	FString StrPolyRef;
 };
 
 UENUM(BlueprintType)
@@ -158,8 +164,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Flow Field | Poly")
 	FVector DeltaMove(AActor* Agent, UPARAM(ref) FVector& Velocity, float MaxSpeed=100.f, float Mass=1.f);
 
-	//UFUNCTION(BlueprintCallable,Category="Flow Field | Poly")
-	FVector GetFlowByPoly(const FVector& Location, FVector CurVelocity,dtPolyRef PolyRef, FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, FVector ProjectExtent=FVector(50,50,200));
+	UFUNCTION(BlueprintCallable,Category="Flow Field | Poly")
+	FVector GetFlowByPoly(const FVector& Location, FVector CurVelocity,
+		FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, 
+		FVector ProjectExtent=FVector(50,50,200));
+
+	UFUNCTION(BlueprintCallable, Category = "EntityNeibour")
+	void RegistryMassEntity(AEntityActor* Entity);
+
+	UFUNCTION(BlueprintCallable, Category = "EntityNeibour")
+	void DebugDrawNeibours(AEntityActor* Entity,  int32 MaxNum);
 
 	FVector GetFlowCenter(dtPolyRef PolyRef) const;
 
