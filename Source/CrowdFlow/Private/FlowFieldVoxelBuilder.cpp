@@ -100,6 +100,7 @@ void AFlowFieldVoxelBuilder::OnConstruction(const FTransform& Transform)
 {
     GenerateFlowFieldPoly();
     ConstructNeibourOffsets();
+    //RegistryNeibourSubsystem();
 }
 
 FIntVector AFlowFieldVoxelBuilder::GetGridIndex(const FVector& Location) const
@@ -144,6 +145,8 @@ FVector AFlowFieldVoxelBuilder::SampleDirction(const FVector& Location)
 void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
 {
     FlowFieldByPoly.Empty();
+	VertToPolyMap.Empty();
+
 
     UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(GetWorld());
     if (!NavSys) return;
@@ -154,6 +157,7 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
     const dtNavMesh* DetourMesh = RecastNavMesh->GetRecastMesh();
     if (!DetourMesh) return;
 
+	//遍历所有的多边形，构建多边形流场
     for (int32 i = 0; i < DetourMesh->getMaxTiles(); ++i)
     {
         const dtMeshTile* Tile = DetourMesh->getTile(i);
@@ -182,15 +186,18 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
             for (int32 k = 0; k < VertCount; ++k)
             {
                 const dtReal* v = &Tile->verts[Poly->verts[k] * 3];
-                Flow.Center += FVector(-1.0 * v[0], -1.0 * v[2], v[1]);
-                Flow.PolyVerts.Add(FVector(-1.0 * v[0], -1.0 * v[2], v[1]));
+				FVector PolyVert = FVector(-1.0 * v[0], -1.0 * v[2], v[1]); // 注意Recast的Y和Z轴是反的
+                Flow.Center += PolyVert;
+                Flow.PolyVerts.Add(PolyVert);
+
+				VertToPolyMap.Add(PolyVert, PolyRef);
 
                 if (Poly->neis[k] == 0)
                 {
                     Flow.BoundaryEdge.Add(k);
                 }
                 
-                DrawDebugPoint(GetWorld(), FVector(-1.0 * v[0], -1.0 * v[2], v[1]), 5.0f, FColor::Blue, false, DebugDrawTime);
+                DrawDebugPoint(GetWorld(), PolyVert, 5.0f, FColor::Blue, false, DebugDrawTime);
             }
             Flow.Center /= float(VertCount);
 
@@ -208,7 +215,7 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
                 Flow.BoundaryEdgeNormal.Add(InnerNormal.GetSafeNormal());
             }
 
-			//获取多边形的邻接多边形
+			//获取多边形边的邻接多边形
             for (unsigned int edgeIndex = 0; edgeIndex < Poly->vertCount; ++edgeIndex)
                 {
                     if (Poly->neis[edgeIndex] & DT_EXT_LINK)
@@ -220,7 +227,7 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
                             if (link.edge == edgeIndex && link.ref!=0)
                             {
                                 UE_LOG(LogTemp, Log, TEXT("Found external neighbor poly: %llu for poly: %llu"), link.ref, PolyRef);
-                                Flow.Neibours.Add(link.ref);
+                                Flow.EdgeNeibours.Add(link.ref);
                             }
                             linkIndex = link.next;
                         }
@@ -232,7 +239,7 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
                         dtPolyRef NeighborRef = DetourMesh->encodePolyId(Tile->salt, DetourMesh->getTileIndex(Tile), neiIndex);
                         if(NeighborRef !=0)
                         {
-                            Flow.Neibours.Add(NeighborRef);
+                            Flow.EdgeNeibours.Add(NeighborRef);
                         }
                     }
                 }
@@ -268,7 +275,31 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
             FlowFieldByPoly.Add(PolyRef, Flow);
             }
         }
+        //构建多边形顶点邻接多边形
+        for (auto& Elem : FlowFieldByPoly)
+        {
+            dtPolyRef PolyRef = Elem.Key;
+            FNavPolyFlow& Flow = Elem.Value;
+            if (Flow.bIsValid)
+            {
+                for (const FVector& PolyVert : Flow.PolyVerts)
+                {
+                    TArray<dtPolyRef> VertNeibourPolys;
+
+                    VertToPolyMap.MultiFind(PolyVert,VertNeibourPolys);
+                    for (dtPolyRef NeiRef : VertNeibourPolys)
+                    {
+                        if (NeiRef != 0 && NeiRef != PolyRef )
+                        {
+                            Flow.VertNeibours.AddUnique(NeiRef);
+                        }
+                    }
+                }
+            }
+        }
     }
+
+
 
 void AFlowFieldVoxelBuilder::DebugDrawFlowFieldPoly()
 {
@@ -318,6 +349,45 @@ void AFlowFieldVoxelBuilder::DebugDrawFlowFieldPoly()
     }
 }
 
+void AFlowFieldVoxelBuilder::DebugDrawSinglePoly(FString PolyRef)
+{
+	dtPolyRef PolyRefValue = FCString::Atoi64(*PolyRef);
+	UE_LOG(LogTemp, Log, TEXT("DebugDrawSinglePoly PolyRef: %llu"), PolyRefValue);
+
+	FNavPolyFlow* PolyFlow = FlowFieldByPoly.Find(PolyRefValue);
+    if (!PolyFlow)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PolyRef not found in FlowFieldByPoly! PolyRef: %llu"), PolyRefValue);
+		return;
+    }
+	//draw the polygon center
+	DrawDebugPoint(GetWorld(), PolyFlow->Center, 10.0f, FColor::Green, false, DebugDrawTime);
+
+	//Draw VertNeibours
+	UE_LOG(LogTemp, Log, TEXT("PolyFlow VertNeibours Count: %d"), PolyFlow->VertNeibours.Num());
+    for(const auto& Nei:PolyFlow->VertNeibours)
+    {
+        FNavPolyFlow* NeibourFlow = FlowFieldByPoly.Find(Nei);
+        if (NeibourFlow && NeibourFlow->bIsValid)
+        {
+            DrawDebugLine(GetWorld(), PolyFlow->Center, NeibourFlow->Center, FColor::Blue, false, DebugDrawTime, 0, 2.0f);
+            DrawDebugPoint(GetWorld(), NeibourFlow->Center, 5.0f, FColor::Blue, false, DebugDrawTime);
+        }
+	}
+
+	//Draw EdgeNeibours
+	//UE_LOG(LogTemp, Log, TEXT("PolyFlow EdgeNeibours Count: %d"), PolyFlow->EdgeNeibours.Num());
+ //   for(const auto& Nei : PolyFlow->EdgeNeibours)
+ //   {
+ //       FNavPolyFlow* NeibourFlow = FlowFieldByPoly.Find(Nei);
+ //       if (NeibourFlow && NeibourFlow->bIsValid)
+ //       {
+ //           DrawDebugLine(GetWorld(), PolyFlow->Center, NeibourFlow->Center, FColor::Red, false, DebugDrawTime, 0, 2.0f);
+ //           DrawDebugPoint(GetWorld(), NeibourFlow->Center, 5.0f, FColor::Red, false, DebugDrawTime);
+ //       }
+	//}
+}
+
 FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector CurVelocity, 
     FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, FVector ProjectExtent) 
 {
@@ -336,7 +406,7 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
         return FVector::ZeroVector;
     }
     //位于中心的点或没有邻居多边形时，直接返回当前多边形的流向
-    if (CurPolyFlow->Neibours.Num() == 0 || FVector::Distance(CurPolyFlow->Center, Location) <= 0.001)
+    if (CurPolyFlow->VertNeibours.Num() == 0 || FVector::Distance(CurPolyFlow->Center, Location) <= 0.001)
     {
         UE_LOG(LogTemp, Warning, TEXT("Poly:%llu Has No Neibours or Locate at Center"), PolyRef);
         return CurPolyFlow->FlowDirection;
@@ -350,7 +420,7 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
     {
         float TotalWeight = 0;
 
-        for (auto& NeibourPolyRef : CurPolyFlow->Neibours)
+        for (auto& NeibourPolyRef : CurPolyFlow->VertNeibours)
         {
             const FNavPolyFlow* NeibourFlow = FlowFieldByPoly.Find(NeibourPolyRef);
             if (NeibourFlow && NeibourFlow->bIsValid)
@@ -420,39 +490,7 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
     return FlowDirection;
 }
 
-void AFlowFieldVoxelBuilder::RegistryMassEntity(AEntityActor* Entity)
-{
-	
-	FMassEntityHandle EntityHandle =Entity->EntityHandle;
 
-	UFlowFieldNeiboursSubsystem* FlowFieldSubsystem = GetWorld()->GetSubsystem<UFlowFieldNeiboursSubsystem>();
-    if (!FlowFieldSubsystem)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("FlowFieldSubsystem not found! Cannot register entity."));
-		return;
-    }
-	FVector EntityLocation = Entity->GetActorLocation();
-    
-	dtPolyRef NewEntityPolyRef=GetPolyRef(Entity->GetActorLocation(), FVector(VoxelSize / 2.0f));
-    if (NewEntityPolyRef == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to get PolyRef for entity at location: %s"), *EntityLocation.ToString());
-        return;
-	}
-
-    UE_LOG(LogTemp, Log, TEXT("Entity %s:%d registered with NewPolyRef: %llu, OldPolyRef:%llu"),
-        *Entity->GetName(), Entity->EntityID, NewEntityPolyRef,Entity->CurrentPolyRef);
-    if(Entity->CurrentPolyRef!= NewEntityPolyRef)
-    {
-
-        FlowFieldSubsystem->UpdatePolyEntity(NewEntityPolyRef, Entity->CurrentPolyRef, EntityHandle);
-
-		Entity->CurrentPolyRef = NewEntityPolyRef;
-		
-	}
-
-
-}
 
 void AFlowFieldVoxelBuilder::DebugDrawNeibours(AEntityActor* Entity,int32 MaxNum)
 {
@@ -475,10 +513,98 @@ void AFlowFieldVoxelBuilder::DebugDrawNeibours(AEntityActor* Entity,int32 MaxNum
 	}
 }
 
+void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVector& NeiRepel)
+{
+    bool DebugDraw = true;
+    NeiRepel = FVector::ZeroVector;
+    float TotalWeight = 0;
+
+	UFlowFieldNeiboursSubsystem* FlowFieldSubsystem = GetWorld()->GetSubsystem<UFlowFieldNeiboursSubsystem>();
+    if(!FlowFieldSubsystem)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem not found! Cannot get force from neibours."));
+        return;
+	}
+    TArray<FMassEntityHandle> NeibourEntities = FlowFieldSubsystem->GetPolyEntities(EntityActor->CurrentPolyRef, 10);
+    if(NeibourEntities.Num()==0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No neibour entities found for PolyRef: %llu"), EntityActor->CurrentPolyRef);
+        return;
+    }
+	NeibourEntities.Remove(EntityActor->EntityHandle); // 移除自身实体
+
+    
+    
+
+	UE_LOG(LogTemp, Log, TEXT("EntityActor ID: %d, Get NeibourEntities Count: %d"), EntityActor->EntityID, NeibourEntities.Num());
+
+    int NeiCount = 0;
+    for (const FMassEntityHandle& NeibourEntity : NeibourEntities)
+    {
+        AEntityActor* NeiEntityActor =FlowFieldSubsystem->EntityToActor.FindRef(NeibourEntity);
+        if (NeiEntityActor)
+        {
+			FVector DistVector = NeiEntityActor->GetActorLocation()- EntityActor->GetActorLocation();
+			float Distance = DistVector.Length();
+
+			if (Distance < DistTolenrance)
+            {
+				UE_LOG(LogTemp, Warning, TEXT("Found a Neibour:%d. Distance: %f"), NeiEntityActor->EntityID, Distance);
+
+                NeiCount++;
+
+                float Weight = FMath::Clamp(1.0f / Distance,0.00001,5); // 限制最小权重
+				TotalWeight += Weight;
+                FVector Force = FVector::CrossProduct(FVector::CrossProduct(DistVector, EntityActor->Velocity), DistVector);
+                Force = Force.GetSafeNormal() * Weight*NeibourRepel; // 使用权重来调整力的大小
+                NeiRepel += Force;
+                if(DebugDraw)
+                {
+                    DrawDebugLine(
+                        GetWorld(),
+                        EntityActor->GetActorLocation(),
+                        NeiEntityActor->GetActorLocation(),
+                        FColor::Green, false, DebugDrawTime, 0, 1.5f);
+
+                    DrawDebugDirectionalArrow(
+                        GetWorld(),
+                        EntityActor->GetActorLocation(),
+                        EntityActor->GetActorLocation() + 100.0*Force,
+                        30.f, FColor::Red, false, DebugDrawTime, 0, 1.5f);
+                }
+            }
+        }
+    }
+    NeiRepel = NeiRepel / TotalWeight/ NeiCount; // 平均化力
+
+    if(DebugDraw)
+    {
+        DrawDebugDirectionalArrow(
+            GetWorld(),
+            EntityActor->GetActorLocation(),
+            EntityActor->GetActorLocation() + NeiRepel,
+            30.f, FColor::Magenta, false, DebugDrawTime, 0, 1.5f);
+    }
+}
+
+void AFlowFieldVoxelBuilder::RegistryNeibourSubsystem()
+{
+	UFlowFieldNeiboursSubsystem* FlowFieldSubsystem = GetWorld()->GetSubsystem<UFlowFieldNeiboursSubsystem>();
+    if(!FlowFieldSubsystem)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem not found! Cannot register subsystem."));
+        return;
+    }
+    FlowFieldSubsystem->InitializeManual(this);
+}
+
 FVector AFlowFieldVoxelBuilder::DeltaMove(AActor* Agent, UPARAM(ref)FVector& Velocity, float MaxSpeed, float Mass)
 {
 
     if (!Agent) return FVector::ZeroVector;
+
+	FVector NeiRepel = FVector::ZeroVector;
+	GetForceFromNeibours(Cast<AEntityActor>(Agent), NeiRepel);
 
     FVector RepelForce = FVector::ZeroVector;
     FVector GuidanceForce = FVector::ZeroVector;
@@ -488,6 +614,7 @@ FVector AFlowFieldVoxelBuilder::DeltaMove(AActor* Agent, UPARAM(ref)FVector& Vel
     float DeltaTime = GetWorld()->GetDeltaSeconds();
 
     FVector FinalForce = GetFlowByPoly(AgentLocation, Velocity, RepelForce, GuidanceForce, PlaneForce, FVector(VoxelSize / 2.0f));
+	FinalForce += NeiRepel; // 添加邻居的排斥力
 
     FVector Acceleration = FinalForce / Mass; // 使用质量来计算加速度
     Velocity += Acceleration * DeltaTime; // 更新速度
@@ -522,7 +649,7 @@ dtPolyRef AFlowFieldVoxelBuilder::GetPolyRef(const FVector& Location, FVector Pr
         UE_LOG(LogTemp, Warning, TEXT("Navigation System not found!"));
         return 0;
     }
-    DrawDebugPoint(GetWorld(), Location, 15, FColor::Black, false, 5.0, 0);
+    //DrawDebugPoint(GetWorld(), Location, 15, FColor::Black, false, 5.0, 0);
 
     FNavLocation NavLocation;
 

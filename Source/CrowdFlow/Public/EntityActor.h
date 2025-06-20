@@ -29,11 +29,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Entity Properties")
 	AFlowFieldVoxelBuilder* FlowFieldVoxelBuilder; // Reference to the FlowFieldVoxelBuilder
 
-	dtPolyRef CurrentPolyRef=0; 
+	dtPolyRef CurrentPolyRef=0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Entity Metadata")
+	FString StrPolyRef; // String representation of the polyRef
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Entity Properties")
+	FVector Velocity = FVector(1, 0, 0); 
 
 	UPROPERTY(VisibleAnywhere, Category = "Entity Properties")
 	FMassEntityHandle EntityHandle; 
 
+	void SetPolyRef(dtPolyRef NewPolyRef) { CurrentPolyRef = NewPolyRef; StrPolyRef = LexToString(NewPolyRef); }
 protected:
 	void OnConstruction(const FTransform& Transform) override;
 	

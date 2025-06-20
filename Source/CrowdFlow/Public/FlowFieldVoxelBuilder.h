@@ -39,7 +39,9 @@ struct FNavPolyFlow
 	UPROPERTY(BlueprintReadOnly)
 	FVector Center;
 
-	TArray<dtPolyRef> Neibours;
+	TArray<dtPolyRef> EdgeNeibours;
+
+	TArray<dtPolyRef> VertNeibours;
 
 	UPROPERTY(BlueprintReadOnly)
 	TArray<FVector> PolyVerts;
@@ -97,6 +99,7 @@ public:
 	UPROPERTY(BlueprintReadOnly)
 	TMap<FIntVector, FFlowVoxel> FlowField;
 
+
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	float AgentRadius = 100.f;
 
@@ -114,6 +117,12 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
 	float PlaneForceStrength = 100.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float DistTolenrance = 300.f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float NeibourRepel = 50.f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force | PlaneForce")
 	float SurfaceHeightTolerance = 10.f;
@@ -152,11 +161,16 @@ public:
 
 	TMap<dtPolyRef, FNavPolyFlow> FlowFieldByPoly;
 
+	TMultiMap<FVector, dtPolyRef> VertToPolyMap;
+
 	UFUNCTION(CallInEditor, Category = "Flow Field | Poly")
 	void GenerateFlowFieldPoly();
 
 	UFUNCTION(CallInEditor, Category = "Flow Field | Poly")
 	void DebugDrawFlowFieldPoly();
+
+	UFUNCTION(CallInEditor,BlueprintCallable, Category = "Flow Field | Poly")
+	void DebugDrawSinglePoly(FString PolyRef);
 
 	UFUNCTION(BlueprintPure,Category="Flow Field | Poly")
 	void  GetFlowPoly(TArray<FNavPolyFlow>& Polys) const {  FlowFieldByPoly.GenerateValueArray(Polys); } ;
@@ -170,10 +184,13 @@ public:
 		FVector ProjectExtent=FVector(50,50,200));
 
 	UFUNCTION(BlueprintCallable, Category = "EntityNeibour")
-	void RegistryMassEntity(AEntityActor* Entity);
-
-	UFUNCTION(BlueprintCallable, Category = "EntityNeibour")
 	void DebugDrawNeibours(AEntityActor* Entity,  int32 MaxNum);
+
+	UFUNCTION(BlueprintCallable, Category = "FlowField | Poly | Force")
+	void GetForceFromNeibours(AEntityActor* EntityActor,FVector& NeiRepel);
+
+	UFUNCTION(CallInEditor,BlueprintCallable, Category = "EntityNeibour")
+	void RegistryNeibourSubsystem();
 
 	FVector GetFlowCenter(dtPolyRef PolyRef) const;
 
