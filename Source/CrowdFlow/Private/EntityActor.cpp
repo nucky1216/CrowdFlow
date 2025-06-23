@@ -3,6 +3,7 @@
 
 #include "EntityActor.h"
 #include "MassEntityTypes.h"
+#include "FlowFieldVoxelBuilder.h"
 
 // Sets default values
 AEntityActor::AEntityActor()
@@ -30,6 +31,17 @@ void AEntityActor::ConstructHandle()
 {
 	EntityHandle = FMassEntityHandle::FromNumber(EntityID);
 	UE_LOG(LogTemp, Log, TEXT("Get ID:%lld to EntityHandle:%llu"), EntityID, EntityHandle.AsNumber());
+}
+
+void AEntityActor::RegistryToSubsystem()
+{
+	FlowFieldNeiboursSubsystem = GetWorld()->GetSubsystem<UFlowFieldNeiboursSubsystem>();
+	if (!FlowFieldNeiboursSubsystem)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem is not set in AEntityActor! "));
+		return;
+	}
+	FlowFieldNeiboursSubsystem->RegistryMassEntity(this);
 }
 
 void AEntityActor::OnConstruction(const FTransform& Transform)

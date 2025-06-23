@@ -35,12 +35,17 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Entity Properties")
 	FVector Velocity = FVector(1, 0, 0); 
+	UPROPERTY(VisibleAnywhere, Category = "Entity Properties")
+	UFlowFieldNeiboursSubsystem* FlowFieldNeiboursSubsystem; 
 
 	UPROPERTY(VisibleAnywhere, Category = "Entity Properties")
 	FMassEntityHandle EntityHandle; 
 
 	UFUNCTION(BlueprintCallable, Category = "Tool")
 	void ConstructHandle();
+
+	UFUNCTION(BlueprintCallable, Category = "Tool")
+	void RegistryToSubsystem();
 
 	void SetPolyRef(dtPolyRef NewPolyRef) { CurrentPolyRef = NewPolyRef; StrPolyRef = LexToString(NewPolyRef); }
 protected:

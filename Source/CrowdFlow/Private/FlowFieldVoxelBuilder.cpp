@@ -531,6 +531,7 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
         return;
     }
 	NeibourEntities.Remove(EntityActor->EntityHandle); // 移除自身实体
+
     if (NeibourEntities.Num() == 0)
     {
         UE_LOG(LogTemp, Log, TEXT("EntityActor ID: %d, Get NeibourEntities Count: %d"), EntityActor->EntityID, NeibourEntities.Num());
@@ -541,7 +542,11 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
     for (const FMassEntityHandle& NeibourEntity : NeibourEntities)
     {
         AEntityActor* NeiEntityActor =FlowFieldSubsystem->EntityToActor.FindRef(NeibourEntity);
-        if (NeiEntityActor)
+        if (!NeiEntityActor)
+        {
+			UE_LOG(LogTemp, Warning, TEXT("NeibourEntityActor not found for EntityHandle: %llu"), NeibourEntity.AsNumber());
+            return;
+        }
         {
 			FVector DistVector = NeiEntityActor->GetActorLocation()- EntityActor->GetActorLocation();
 			float Distance = DistVector.Length();
@@ -554,8 +559,9 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
 
                 float Weight = FMath::Clamp(1.0f / Distance,0.00001,5); // 限制最小权重
 				TotalWeight += Weight;
-                FVector Force = FVector::CrossProduct(FVector::CrossProduct(DistVector, EntityActor->Velocity), DistVector);
-                Force = Force.GetSafeNormal() * Weight*NeibourRepel; // 使用权重来调整力的大小
+                //FVector Force = -FVector::CrossProduct(FVector::CrossProduct(DistVector, EntityActor->Velocity), DistVector);
+				//FVector Force = -DistVector.GetSafeNormal() * Weight; // 使用距离的倒数作为权重
+                FVector Force = -DistVector.GetSafeNormal() * Weight * NeibourRepel; // 使用权重来调整力的大小
                 NeiRepel += Force;
                 if(DebugDraw)
                 {
@@ -563,26 +569,29 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
                         GetWorld(),
                         EntityActor->GetActorLocation(),
                         NeiEntityActor->GetActorLocation(),
-                        FColor::Green, false, DebugDrawTime, 0, 1.5f);
+                        FColor::Green, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 1.5f);
 
                     DrawDebugDirectionalArrow(
                         GetWorld(),
                         EntityActor->GetActorLocation(),
                         EntityActor->GetActorLocation() + 100.0*Force,
-                        30.f, FColor::Red, false, DebugDrawTime, 0, 1.5f);
+                        30.f, FColor::Red, false, GetWorld()->GetDeltaSeconds()+0.001, 0, 1.5f);
                 }
             }
         }
     }
-    NeiRepel = NeiRepel / TotalWeight/ NeiCount; // 平均化力
+    if (NeiCount == 0)
+        return;
 
+    NeiRepel = NeiRepel / TotalWeight/ NeiCount; // 平均化力
+	//UE_LOG(LogTemp, Log, TEXT("EntityActor ID: %d, Neibour Count: %d, NeiRepel: %s"), EntityActor->EntityID, NeiCount, *NeiRepel.ToString());
     if(DebugDraw)
     {
         DrawDebugDirectionalArrow(
             GetWorld(),
             EntityActor->GetActorLocation(),
             EntityActor->GetActorLocation() + NeiRepel,
-            30.f, FColor::Magenta, false, DebugDrawTime, 0, 1.5f);
+            30.f, FColor::Magenta, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 1.5f);
     }
 }
 
@@ -620,8 +629,8 @@ FVector AFlowFieldVoxelBuilder::DeltaMove(AEntityActor* Agent, UPARAM(ref)FVecto
     Velocity += Acceleration * DeltaTime; // 更新速度
     Velocity = Velocity.GetClampedToSize(0, MaxSpeed); // 限制速度
 
-   // UE_LOG(LogTemp,Log,TEXT("Entity:%d has Velocity:%s, Acceleration:%s, FinalForce:%s, RepelForce:%s, NeiRepel:%s, PlaneForce:%s"),
-   //    Agent->EntityID, *Velocity.ToString(), *(Acceleration * DeltaTime).ToString(), *FinalForce.ToString(), *RepelForce.ToString(), *NeiRepel.ToString(), *PlaneForce.ToString());
+    //UE_LOG(LogTemp,Log,TEXT("Entity:%d has Velocity:%s, Acceleration:%s, FinalForce:%s, RepelForce:%s, NeiRepel:%s, PlaneForce:%s"),
+    //   Agent->EntityID, *Velocity.ToString(), *(Acceleration * DeltaTime).ToString(), *FinalForce.ToString(), *RepelForce.ToString(), *NeiRepel.ToString(), *PlaneForce.ToString());
 
     FVector DeltaLocation = Velocity * DeltaTime; // 计算位移
 
