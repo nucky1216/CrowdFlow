@@ -58,7 +58,4 @@ public:
 	virtual bool IsTickable() const override { return true; }
 	virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(UFlowFieldNeiboursSubsystem, STATGROUP_Tickables); }
 
-
-	
-	
 };

@@ -16,9 +16,8 @@ public:
 	// Sets default values for this actor's properties
 	AEntityActor();
 
-protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
+
+
 
 public:	
 	// Called every frame
@@ -40,9 +39,12 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Entity Properties")
 	FMassEntityHandle EntityHandle; 
 
+	UFUNCTION(BlueprintCallable, Category = "Tool")
+	void ConstructHandle();
+
 	void SetPolyRef(dtPolyRef NewPolyRef) { CurrentPolyRef = NewPolyRef; StrPolyRef = LexToString(NewPolyRef); }
 protected:
 	void OnConstruction(const FTransform& Transform) override;
-	
+	virtual void BeginPlay() override;
 	
 };

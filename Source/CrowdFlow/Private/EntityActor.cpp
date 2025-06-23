@@ -16,7 +16,7 @@ AEntityActor::AEntityActor()
 void AEntityActor::BeginPlay()
 {
 	Super::BeginPlay();
-	
+	ConstructHandle();
 }
 
 // Called every frame
@@ -26,10 +26,15 @@ void AEntityActor::Tick(float DeltaTime)
 
 }
 
-void AEntityActor::OnConstruction(const FTransform& Transform)
+void AEntityActor::ConstructHandle()
 {
 	EntityHandle = FMassEntityHandle::FromNumber(EntityID);
-	UE_LOG(LogTemp, Log, TEXT("Get ID:%d to EntityHandle:%u"),EntityID,EntityHandle.AsNumber());
+	UE_LOG(LogTemp, Log, TEXT("Get ID:%lld to EntityHandle:%llu"), EntityID, EntityHandle.AsNumber());
+}
+
+void AEntityActor::OnConstruction(const FTransform& Transform)
+{
+	ConstructHandle();
 }
 
 

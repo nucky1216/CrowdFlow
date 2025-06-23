@@ -14,6 +14,8 @@
 void UFlowFieldNeiboursSubsystem::DebugMap()
 {
 	UE_LOG(LogTemp, Log, TEXT("Debugging PolyNeibours Map with Num:%d"), PolyNeibours.Num());
+	UE_LOG(LogTemp, Log, TEXT("EntityToActor Map with Num:%d"), EntityToActor.Num());
+
 	for (auto Pair : PolyNeibours)
 	{
 		UE_LOG(LogTemp, Log, TEXT("PolyRef %llu has %d entities"), Pair.Key, Pair.Value.Num());
@@ -39,7 +41,7 @@ void UFlowFieldNeiboursSubsystem::InitializeManual(AFlowFieldVoxelBuilder* FlowF
 	EntityToActor.Empty();
 
 	UE_LOG(LogTemp, Log, TEXT("FlowFieldNeiboursSubsystem Initialized with empty PolyNeibours map."));
-	DebugMap(); // Optional: Call DebugMap to log the initial state
+	
 
 	FlowFieldBuilder = FlowField;
 
@@ -47,6 +49,18 @@ void UFlowFieldNeiboursSubsystem::InitializeManual(AFlowFieldVoxelBuilder* FlowF
 	{
 		UE_LOG(LogTemp, Log, TEXT("Failed to Find FlowFieldVoxelBuilder in the world"));
 	}
+	for(TActorIterator<AEntityActor>It(GetWorld()); It; ++It)
+	{
+		AEntityActor* EntityActor = *It;
+		if (EntityActor)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Found EntityActor: %s, with EntityID: %lld, Handle:%llu"), 
+				*EntityActor->GetName(), EntityActor->EntityID,EntityActor->EntityHandle.AsNumber());
+			EntityToActor.Add(EntityActor->EntityHandle, EntityActor);
+		}
+	}
+
+	DebugMap(); 
 }
 
 void UFlowFieldNeiboursSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -58,13 +72,25 @@ void UFlowFieldNeiboursSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 
 void UFlowFieldNeiboursSubsystem::Tick(float DeltaTime)
 {
-	
+	UE_LOG(LogTemp, Log, TEXT("FlowFieldNeiboursSubsystem Tick called with EntityToActorNum: %d"), EntityToActor.Num());
 	// Iterate through all EntityActors in the world and update their poly references
+	if(EntityToActor.Num() == 0)
+	{
+		// If there are no EntityActors, we can skip the tick
+		UE_LOG(LogTemp, Log, TEXT("No EntityActors to tick. Skipping tick."));
+		return;
+	}
+	if (!FlowFieldBuilder)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FlowFieldBuilder is not valid in Tick."));
+		return;
+	}
 	for (auto& EntityPair:EntityToActor)
 	{
 		AEntityActor* EntityActor = EntityPair.Value;
 		if (EntityActor)
 		{
+			//UE_LOG(LogTemp, Log, TEXT("Ticking EntityActor: %s with PolyRef: %llu"), *EntityActor->GetName(), EntityActor->CurrentPolyRef);
 			RegistryMassEntity(EntityActor);
 		}
 	}
@@ -228,7 +254,11 @@ TArray<FMassEntityHandle> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtPolyRef
 
 void UFlowFieldNeiboursSubsystem::RegistryMassEntity(AEntityActor* Entity)
 {
-
+	if(Entity == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Entity is null in RegistryMassEntity"));
+		return;
+	}
 	FMassEntityHandle EntityHandle = Entity->EntityHandle;
 
 	if (!EntityToActor.Find(EntityHandle))
@@ -238,20 +268,20 @@ void UFlowFieldNeiboursSubsystem::RegistryMassEntity(AEntityActor* Entity)
 	
 	if(!FlowFieldBuilder)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("FlowFieldBuilder is not valid or EntityHandle is invalid."));
+		UE_LOG(LogTemp, Warning, TEXT("FlowFieldBuilder is not valid"));
 		return;
 	}
 	FVector EntityLocation = Entity->GetActorLocation();
 
-	dtPolyRef NewEntityPolyRef = FlowFieldBuilder->GetPolyRef(Entity->GetActorLocation(), FVector(FlowFieldBuilder->VoxelSize / 2.0f));
+	dtPolyRef NewEntityPolyRef = FlowFieldBuilder->GetPolyRef(EntityLocation, FVector(FlowFieldBuilder->VoxelSize / 2.0f));
 	if (NewEntityPolyRef == 0)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Failed to get PolyRef for entity at location: %s"), *EntityLocation.ToString());
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("Entity %s:%d registered with NewPolyRef: %llu, OldPolyRef:%llu"),
-		*Entity->GetName(), Entity->EntityID, NewEntityPolyRef, Entity->CurrentPolyRef);
+	UE_LOG(LogTemp, Log, TEXT("Entity:%lld registered with NewPolyRef: %llu, OldPolyRef:%llu at location:%s"),
+							Entity->EntityID, NewEntityPolyRef, Entity->CurrentPolyRef, *EntityLocation.ToString());
 	if (Entity->CurrentPolyRef != NewEntityPolyRef)
 	{
 

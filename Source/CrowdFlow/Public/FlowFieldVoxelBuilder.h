@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Detour/DetourNavMesh.h"
+#include "FlowFieldNeiboursSubsystem.h"
 #include "MassEntityTypes.h"
 #include "EntityActor.h"
 #include "FlowFieldVoxelBuilder.generated.h"
@@ -133,6 +134,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force | PlaneForce")
 	float SurfaceSpringDampingC = 300.0f;
 
+	UPROPERTY(VisibleAnywhere, Category = "WorldSubsystem")
+	UFlowFieldNeiboursSubsystem* FlowFieldSubsystem=nullptr;
+
 	UPROPERTY(EditAnywhere, Category = "Flow Field")
 	int32 MaxDrawCount = 100;
 
@@ -176,7 +180,7 @@ public:
 	void  GetFlowPoly(TArray<FNavPolyFlow>& Polys) const {  FlowFieldByPoly.GenerateValueArray(Polys); } ;
 
 	UFUNCTION(BlueprintCallable, Category = "Flow Field | Poly")
-	FVector DeltaMove(AActor* Agent, UPARAM(ref) FVector& Velocity, float MaxSpeed=100.f, float Mass=1.f);
+	FVector DeltaMove(AEntityActor* Agent, UPARAM(ref) FVector& Velocity, float MaxSpeed=100.f, float Mass=1.f);
 
 	UFUNCTION(BlueprintCallable,Category="Flow Field | Poly")
 	FVector GetFlowByPoly(const FVector& Location, FVector CurVelocity,
