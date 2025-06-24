@@ -524,6 +524,8 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
         UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem not found! Cannot get force from neibours."));
         return;
 	}
+	FNavPolyFlow CurPoly =FlowFieldByPoly.FindRef(EntityActor->CurrentPolyRef); // 确保当前多边形存在
+    
     TArray<FMassEntityHandle> NeibourEntities = FlowFieldSubsystem->GetPolyEntities(EntityActor->CurrentPolyRef, 10);
     if(NeibourEntities.Num()==0)
     {
@@ -553,8 +555,7 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
 
 			if (Distance < DistTolenrance)
             {
-				UE_LOG(LogTemp, Warning, TEXT("Found a Neibour:%d. Distance: %f"), NeiEntityActor->EntityID, Distance);
-
+				//UE_LOG(LogTemp, Warning, TEXT("Found a Neibour:%d. Distance: %f"), NeiEntityActor->EntityID, Distance);
                 NeiCount++;
 
                 float Weight = FMath::Clamp(1.0f / Distance,0.00001,5); // 限制最小权重
@@ -584,6 +585,8 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
         return;
 
     NeiRepel = NeiRepel / TotalWeight/ NeiCount; // 平均化力
+	NeiRepel = FVector::VectorPlaneProject(NeiRepel, CurPoly.PolyNormal); // 投影到多边形平面上
+
 	//UE_LOG(LogTemp, Log, TEXT("EntityActor ID: %d, Neibour Count: %d, NeiRepel: %s"), EntityActor->EntityID, NeiCount, *NeiRepel.ToString());
     if(DebugDraw)
     {
