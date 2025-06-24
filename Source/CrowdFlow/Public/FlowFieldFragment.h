@@ -29,4 +29,9 @@ struct CROWDFLOW_API FFlowFieldFragment : public FMassFragment
     UPROPERTY(EditAnywhere, Category = "Movement")
     float Mass = 1.0f;
 
+	UPROPERTY(VisibleAnywhere, Category = "Component")
+	UFlowFieldNeiboursSubsystem* NeiboursSubsystem = nullptr;
+
+	dtPolyRef CurrentPolyRef = 0;
+
 };

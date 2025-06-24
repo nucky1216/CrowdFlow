@@ -6,7 +6,7 @@
 #include "FlowFieldFragment.h"
 #include "FlowFieldNeiboursSubsystem.h"
 
-UFillNeiboursProcessor::UFillNeiboursProcessor()
+UFillNeiboursProcessor::UFillNeiboursProcessor():EntityQuery(*this)
 {
 	ExecutionOrder.ExecuteInGroup = TEXT("Movement");
 	ExecutionOrder.ExecuteBefore.Add(TEXT("FlowFieldProcessor"));
@@ -21,6 +21,8 @@ void UFillNeiboursProcessor::ConfigureQueries()
 
 void UFillNeiboursProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	UE_LOG(LogTemp, Log, TEXT("FillNeiboursLocs..."));
+
 	UFlowFieldNeiboursSubsystem* FlowFieldNeiboursSubsystem = UWorld::GetSubsystem<UFlowFieldNeiboursSubsystem>(Context.GetWorld());
 
 	if (!FlowFieldNeiboursSubsystem)
@@ -28,6 +30,7 @@ void UFillNeiboursProcessor::Execute(FMassEntityManager& EntityManager, FMassExe
 		UE_LOG(LogTemp, Warning, TEXT("UFlowFieldNeiboursSubsystem not found!"));
 		return;
 	}
+	FlowFieldNeiboursSubsystem->PolyNeibours.Empty();
 
 	EntityQuery.ForEachEntityChunk(EntityManager, Context, [&](FMassExecutionContext& Context)
 	{
@@ -46,15 +49,10 @@ void UFillNeiboursProcessor::Execute(FMassEntityManager& EntityManager, FMassExe
 				AFlowFieldVoxelBuilder* FlowField = FlowFieldFragments[i].FlowField;
 				
 				dtPolyRef SamplerRef = FlowField->GetPolyRef(Location, ProjectorExtent);
-				if(CurPolyRef==0)
-				{
-					FlowFieldNeiboursSubsystem->RegisterPolyEntity(SamplerRef, CurEntity);
-				}
-				if(CurPolyRef != SamplerRef)
-				{
-					FlowFieldNeiboursSubsystem->UnregisterPolyEntity(CurPolyRef, CurEntity);
-					FlowFieldNeiboursSubsystem->RegisterPolyEntity(SamplerRef, CurEntity);
-				}
+				
+				FlowFieldNeiboursSubsystem->RegisterPolyEntity(SamplerRef, CurEntity, Location);
+
+				FlowFieldFragments[i].CurrentPolyRef = SamplerRef;
 				
 			}
 	});

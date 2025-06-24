@@ -187,11 +187,11 @@ public:
 		FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, 
 		FVector ProjectExtent=FVector(50,50,200));
 
-	UFUNCTION(BlueprintCallable, Category = "EntityNeibour")
-	void DebugDrawNeibours(AEntityActor* Entity,  int32 MaxNum);
 
-	UFUNCTION(BlueprintCallable, Category = "FlowField | Poly | Force")
-	void GetForceFromNeibours(AEntityActor* EntityActor,FVector& NeiRepel);
+
+	//UFUNCTION(BlueprintCallable, Category = "FlowField | Poly | Force")
+	void GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector& NeiRepel);
+
 
 	UFUNCTION(CallInEditor,BlueprintCallable, Category = "EntityNeibour")
 	void RegistryNeibourSubsystem();

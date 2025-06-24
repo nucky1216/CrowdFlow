@@ -19,18 +19,13 @@ void UFlowFieldNeiboursSubsystem::DebugMap()
 	for (auto Pair : PolyNeibours)
 	{
 		UE_LOG(LogTemp, Log, TEXT("PolyRef %llu has %d entities"), Pair.Key, Pair.Value.Num());
-		for (const auto& Entity : Pair.Value)
+		int32 i = 0;
+		for (const auto& Entity: Pair.Value)
 		{
-			AEntityActor* EntityActor = EntityToActor.FindRef(Entity);
-			if (IsValid(EntityActor))
-			{
-				UE_LOG(LogTemp, Log, TEXT("------Entity ID: %llu, EntityActor: %s"), Entity.AsNumber(), *EntityActor->GetName());
-			}
-			else
-			{
-				UE_LOG(LogTemp, Warning, TEXT("------Entity ID: %llu not is invalid."), Entity.AsNumber());
-			}
-}
+			//AEntityActor* EntityActor = EntityToActor.FindRef(Entity);
+				UE_LOG(LogTemp, Log, TEXT("------EntityHandle:%llu: EntityLoc: %s"), i, Entity.Key,* Entity.Value.ToString());
+				i++;
+		}
 	}
 }
 
@@ -65,43 +60,43 @@ void UFlowFieldNeiboursSubsystem::InitializeManual(AFlowFieldVoxelBuilder* FlowF
 	DebugMap(); 
 }
 
-void UFlowFieldNeiboursSubsystem::Initialize(FSubsystemCollectionBase& Collection)
-{
-	Super::Initialize(Collection);
-	UE_LOG(LogTemp, Log, TEXT("FlowFieldNeiboursSubsystem Initialized."));
-	//FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &UFlowFieldNeiboursSubsystem::OnLevelAddedToWorld);
-}
+//void UFlowFieldNeiboursSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+//{
+//	Super::Initialize(Collection);
+//	UE_LOG(LogTemp, Log, TEXT("FlowFieldNeiboursSubsystem Initialized."));
+//	//FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &UFlowFieldNeiboursSubsystem::OnLevelAddedToWorld);
+//}
 
-void UFlowFieldNeiboursSubsystem::Tick(float DeltaTime)
-{
-	UE_LOG(LogTemp, Log, TEXT("FlowFieldNeiboursSubsystem Tick called with EntityToActorNum: %d"), EntityToActor.Num());
-	// Iterate through all EntityActors in the world and update their poly references
-	if(EntityToActor.Num() == 0)
-	{
-		// If there are no EntityActors, we can skip the tick
-		UE_LOG(LogTemp, Log, TEXT("No EntityActors to tick. Skipping tick."));
-		return;
-	}
-	if (!FlowFieldBuilder)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("FlowFieldBuilder is not valid in Tick."));
-		return;
-	}
-	for (auto& EntityPair:EntityToActor)
-	{
-		AEntityActor* EntityActor = EntityPair.Value;
-		if (IsValid(EntityActor))
-		{
-			//UE_LOG(LogTemp, Log, TEXT("Ticking EntityActor: %s with PolyRef: %llu"), *EntityActor->GetName(), EntityActor->CurrentPolyRef);
-			RegistryMassEntity(EntityActor);
-		}
-	}
-	OnEntityRegistered.Broadcast(DeltaTime);
-	
-}
+//void UFlowFieldNeiboursSubsystem::Tick(float DeltaTime)
+//{
+//	UE_LOG(LogTemp, Log, TEXT("FlowFieldNeiboursSubsystem Tick called with EntityToActorNum: %d"), EntityToActor.Num());
+//	// Iterate through all EntityActors in the world and update their poly references
+//	if(EntityToActor.Num() == 0)
+//	{
+//		// If there are no EntityActors, we can skip the tick
+//		UE_LOG(LogTemp, Log, TEXT("No EntityActors to tick. Skipping tick."));
+//		return;
+//	}
+//	if (!FlowFieldBuilder)
+//	{
+//		UE_LOG(LogTemp, Warning, TEXT("FlowFieldBuilder is not valid in Tick."));
+//		return;
+//	}
+//	for (auto& EntityPair:EntityToActor)
+//	{
+//		AEntityActor* EntityActor = EntityPair.Value;
+//		if (IsValid(EntityActor))
+//		{
+//			//UE_LOG(LogTemp, Log, TEXT("Ticking EntityActor: %s with PolyRef: %llu"), *EntityActor->GetName(), EntityActor->CurrentPolyRef);
+//			RegistryMassEntity(EntityActor);
+//		}
+//	}
+//	OnEntityRegistered.Broadcast(DeltaTime);
+//	
+//}
 
 
-void UFlowFieldNeiboursSubsystem::RegisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle Entity)
+void UFlowFieldNeiboursSubsystem::RegisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle EntityHandle, FVector EntityLoc)
 {
 	if (PolyRef == 0 )//|| Entity.IsValid() == false)
 	{
@@ -109,27 +104,26 @@ void UFlowFieldNeiboursSubsystem::RegisterPolyEntity(dtPolyRef PolyRef, FMassEnt
 		return;
 	}
 	// Add the entity to the map with the poly reference as the key
-	TArray<FMassEntityHandle>* Neibours = PolyNeibours.Find(PolyRef);
+	TMap<FMassEntityHandle,FVector>* Neibours = PolyNeibours.Find(PolyRef);
 	if (Neibours == nullptr)
 	{
 		// If the poly reference does not exist, create a new entry
-		TArray<FMassEntityHandle> NewNeibours;
-		NewNeibours.Add(Entity);
+		TMap<FMassEntityHandle, FVector> NewNeibours;
+		NewNeibours.Add(EntityHandle,EntityLoc);
 		PolyNeibours.Add(PolyRef, NewNeibours);
 		//UE_LOG(LogTemp, Log, TEXT("Registered new PolyRef %u with Entity %u"), PolyRef, Entity.AsNumber());
 	}
 	else
 	{
 		// If it exists, add the entity to the existing array
-		if (!Neibours->Contains(Entity))
-		{
-			Neibours->Add(Entity);
-			//UE_LOG(LogTemp, Log, TEXT("Registered new PolyRef %u with Entity %u"), PolyRef, Entity.AsNumber());
-		}
+		
+		Neibours->Add(EntityHandle,EntityLoc);
+		//UE_LOG(LogTemp, Log, TEXT("Registered new PolyRef %u with Entity %u"), PolyRef, Entity.AsNumber());
+		
 	}
 }
 
-void UFlowFieldNeiboursSubsystem::UnregisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle Entity)
+void UFlowFieldNeiboursSubsystem::UnregisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle EntityHandle)
 {
 	if (PolyRef == 0)// || Entity.IsValid() == false)
 	{
@@ -137,14 +131,14 @@ void UFlowFieldNeiboursSubsystem::UnregisterPolyEntity(dtPolyRef PolyRef, FMassE
 		return;
 	}
 	
-	TArray<FMassEntityHandle>* Neobours = PolyNeibours.Find(PolyRef);
-	if (Neobours != nullptr)
+	TMap<FMassEntityHandle,FVector>* Neibours = PolyNeibours.Find(PolyRef);
+	if (Neibours != nullptr)
 	{
 		// Remove the entity from the array if it exists
-		if (Neobours->Contains(Entity))
+		if (Neibours->Find(EntityHandle))
 		{
-			Neobours->Remove(Entity);
-			if (Neobours->Num() == 0)
+			Neibours->Remove(EntityHandle);
+			if (Neibours->Num() == 0)
 			{
 				// If no entities left, remove the poly reference from the map
 				PolyNeibours.Remove(PolyRef);
@@ -158,7 +152,7 @@ void UFlowFieldNeiboursSubsystem::UnregisterPolyEntity(dtPolyRef PolyRef, FMassE
 	}
 }
 
-void UFlowFieldNeiboursSubsystem::UpdatePolyEntity(dtPolyRef NewPolyRef, dtPolyRef OldPolyRef, FMassEntityHandle Entity)
+void UFlowFieldNeiboursSubsystem::UpdatePolyEntity(dtPolyRef NewPolyRef, dtPolyRef OldPolyRef, FMassEntityHandle EntityHandle,FVector EntityLoc)
 {
 	if ((NewPolyRef == 0 && OldPolyRef == 0))
 	{
@@ -167,15 +161,15 @@ void UFlowFieldNeiboursSubsystem::UpdatePolyEntity(dtPolyRef NewPolyRef, dtPolyR
 	}
 	
 	// Unregister the entity from the old poly reference
-	UnregisterPolyEntity(OldPolyRef, Entity);
+	//UnregisterPolyEntity(OldPolyRef, EntityLoc);
 	
 	// Register the entity to the new poly reference
-	RegisterPolyEntity(NewPolyRef, Entity);
+	RegisterPolyEntity(NewPolyRef, EntityHandle,EntityLoc);
 }
 
-TArray<FMassEntityHandle> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtPolyRef PolyRef,int32 MaxNum) const
+TMap<FMassEntityHandle,FVector> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtPolyRef PolyRef,int32 MaxNum) const
 {
-	TArray<FMassEntityHandle> OutNeibours;
+	TMap<FMassEntityHandle, FVector> OutNeibours;
 
 	if(!FlowFieldBuilder)
 		return OutNeibours;
@@ -185,11 +179,19 @@ TArray<FMassEntityHandle> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtPolyRef
 		UE_LOG(LogTemp, Warning, TEXT("Invalid PolyRef in GetPolyEntities"));
 		return OutNeibours;
 	}
-	const TArray<FMassEntityHandle>* Neibours = PolyNeibours.Find(PolyRef);
+	const TMap<FMassEntityHandle, FVector>* Neibours = PolyNeibours.Find(PolyRef);
 	if (Neibours != nullptr)
 	{
-		
-		OutNeibours.Append(Neibours->GetData(),FMath::Min(Neibours->Num(),MaxNum));
+		int32 i = 0;
+		for( auto Pair: *Neibours)
+		{
+			if(i >= MaxNum)
+			{
+				break;
+			}
+			OutNeibours.Add(Pair.Key, Pair.Value);
+			i++;
+		}
 
 		if(OutNeibours.Num()<MaxNum)
 		{
@@ -202,6 +204,7 @@ TArray<FMassEntityHandle> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtPolyRef
 			if (CurPoly->VertNeibours.Num() == 0)
 			{
 				UE_LOG(LogTemp, Log, TEXT("The Poly:%llu has No NeibourPoly.Ended with NeibourEntity Num:%d/%d"), PolyRef, OutNeibours.Num(), MaxNum);
+				return OutNeibours;
 			}
 
 			TArray<bool> EmptyFlag;
@@ -216,19 +219,20 @@ TArray<FMassEntityHandle> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtPolyRef
 				if (!EmptyFlag[i])
 				{
 					dtPolyRef NeibourPoly = CurPoly->VertNeibours[i];
-					const TArray<FMassEntityHandle>* EntitiesOfNeibourPoly = PolyNeibours.Find(NeibourPoly);
+					const TMap<FMassEntityHandle,FVector>* EntitiesOfNeibourPoly = PolyNeibours.Find(NeibourPoly);
 
 					if (!EntitiesOfNeibourPoly)
 					{
 						//UE_LOG(LogTemp, Warning, TEXT("NeibourPoly %llu not found in PolyNeibours"), NeibourPoly);
 						EmptyFlag[i] = true;
-
 					}
 					else 
 					{
+						TArray<FMassEntityHandle> KeyArray;
+						EntitiesOfNeibourPoly->GenerateKeyArray(KeyArray);
 						if (OutNeibours.Num() < MaxNum && j < EntitiesOfNeibourPoly->Num())
 						{
-							OutNeibours.Add((*EntitiesOfNeibourPoly)[j]);
+							OutNeibours.Add(KeyArray[j], EntitiesOfNeibourPoly->FindRef(KeyArray[j]));
 						}
 						if (j >= EntitiesOfNeibourPoly->Num())
 						{
@@ -253,6 +257,7 @@ TArray<FMassEntityHandle> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtPolyRef
 	}
 	
 }
+
 
 void UFlowFieldNeiboursSubsystem::RegistryMassEntity(AEntityActor* Entity)
 {
@@ -287,13 +292,38 @@ void UFlowFieldNeiboursSubsystem::RegistryMassEntity(AEntityActor* Entity)
 	if (Entity->CurrentPolyRef != NewEntityPolyRef)
 	{
 
-		UpdatePolyEntity(NewEntityPolyRef, Entity->CurrentPolyRef, EntityHandle);
+		UpdatePolyEntity(NewEntityPolyRef, Entity->CurrentPolyRef, Entity->EntityHandle,EntityLocation);
 
 		Entity->SetPolyRef(NewEntityPolyRef);
 
 	}
 
+}
+
+void UFlowFieldNeiboursSubsystem::InitialForMass()
+{
+
+	PolyNeibours.Empty();
+	EntityToActor.Empty();
+	for(TActorIterator<AFlowFieldVoxelBuilder>It(GetWorld()); It; ++It)
+	{
+		AFlowFieldVoxelBuilder* FlowField = *It;
+		if (IsValid(FlowField))
+		{
+			FlowFieldBuilder = FlowField;
+			break;
+		}
+	}
+	if(!IsValid(FlowFieldBuilder))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FlowFieldVoxelBuilder not found in the world."));
+		return;
+	}
+	UE_LOG(LogTemp, Log, TEXT("FlowFieldVoxelBuilder found: %s"), *FlowFieldBuilder->GetName());
+
 
 }
+
+
 
 

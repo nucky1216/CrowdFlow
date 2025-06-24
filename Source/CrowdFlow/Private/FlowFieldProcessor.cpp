@@ -14,7 +14,7 @@ UFlowFieldProcessor::UFlowFieldProcessor():EntityQuery(*this)
     ExecutionOrder.ExecuteInGroup = TEXT("Movement");
     bAutoRegisterWithProcessingPhases = true;
    
-    ExecutionFlags = (int32)EProcessorExecutionFlags::All;
+    //ExecutionFlags = (int32)EProcessorExecutionFlags::All;
 
 }
 
@@ -71,6 +71,7 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 float Mass = FlowFields[i].Mass; // 假设质量为1.0，实际应用中可以从实体中获取质量信息
                 float MaxSpeed = FlowFields[i].MaxSpeed;  // 获取最大速度
                 int32 MaxNeibourNum = FlowFields[i].MaxSearchNeibourNum;
+                dtPolyRef CurPolyRef = FlowFields[i].CurrentPolyRef;
 
 
                 if(!FlowField)
@@ -84,22 +85,10 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value,
                     DebugRepelForce,DebugGuidanceForce,DebugPlaneForce);  // 获取流场力
 
+				FVector NeiRepelForce = FVector::ZeroVector;
+                FlowField->GetForceFromNeibours(CurPolyRef,Position, NeiRepelForce);
 
-
-
-                const float Radius = 500.f;
-
-				//找到实体周围的邻居
-                for(int32 j=0;j<MaxNeibourNum;j++)
-                {
-					TArray<FMassEntityHandle> Neibours = FlowFieldNeiboursSubsystem->GetPolyEntities(PolyRef,10);
-                    if(Neibours.Num() == 0)
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("No neighbours found for entity %d with Handle:%u"), i, CurEntityHandle.AsNumber());
-                        break;  // 如果没有邻居，跳过此实体
-					}
-				}
-                
+				FlowForce += NeiRepelForce;  // 添加邻居的排斥力
 
 				FVector Velocity=Vels[i].Value + FlowForce/Mass * DeltaTime;  // 施加流场方向的力，数值可调
                 Vels[i].Value= Velocity.GetClampedToSize(0, MaxSpeed);

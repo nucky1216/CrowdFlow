@@ -19,24 +19,25 @@ class AFlowFieldVoxelBuilder;
  * 
  */
 UCLASS()
-class CROWDFLOW_API UFlowFieldNeiboursSubsystem : public UWorldSubsystem, public FTickableGameObject
+class CROWDFLOW_API UFlowFieldNeiboursSubsystem : public UWorldSubsystem//, public FTickableGameObject
 {
 	GENERATED_BODY()
 	
 public:
-	TMap<dtPolyRef, TArray<FMassEntityHandle>> PolyNeibours;
+	TMap<dtPolyRef, TMap<FMassEntityHandle,FVector>> PolyNeibours;
 
 	AFlowFieldVoxelBuilder* FlowFieldBuilder = nullptr;
 
 	TMap<FMassEntityHandle, AEntityActor*> EntityToActor;
 
-	void RegisterPolyEntity(dtPolyRef PolyRef,FMassEntityHandle Entity);
+	void RegisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle EntityHandle, FVector EntityLoc);
 
-	void UnregisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle Entity);
+	void UnregisterPolyEntity(dtPolyRef PolyRef, FMassEntityHandle EntityHandle);
 
-	void UpdatePolyEntity(dtPolyRef NewPolyRef,dtPolyRef OldPolyRef, FMassEntityHandle Entity);
+	void UpdatePolyEntity(dtPolyRef NewPolyRef, dtPolyRef OldPolyRef, FMassEntityHandle EntityHandle, FVector EntityLoc);
 
-	TArray<FMassEntityHandle> GetPolyEntities(dtPolyRef PolyRef,int32 MaxNum) const;
+	TMap<FMassEntityHandle, FVector> GetPolyEntities(dtPolyRef PolyRef,int32 MaxNum) const;
+
 
 	UFUNCTION(BlueprintCallable, Category = "Subsystem")
 	void ResetMap()	{		PolyNeibours.Reset();	}
@@ -53,9 +54,14 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Subsystem")
 	FOnEntityRegistered OnEntityRegistered;
 
+	void InitialForMass();
+	
+
+	/*
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual bool IsTickable() const override { return true; }
 	virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(UFlowFieldNeiboursSubsystem, STATGROUP_Tickables); }
+	*/
 
 };

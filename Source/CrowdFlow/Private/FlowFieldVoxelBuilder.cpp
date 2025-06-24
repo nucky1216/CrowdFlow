@@ -484,78 +484,50 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
 
 
 
-void AFlowFieldVoxelBuilder::DebugDrawNeibours(AEntityActor* Entity,int32 MaxNum)
-{
-    if(!FlowFieldSubsystem)
-    {
-		UE_LOG(LogTemp, Warning, TEXT("FlowFieldSubsystem not initialized! Cannot register entity."));
-        return;
-    }
-    if (!FlowFieldSubsystem)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("FlowFieldSubsystem not found! Cannot register entity."));
-        return;
-    }
-    TArray<FMassEntityHandle> NeibourEntities = FlowFieldSubsystem->GetPolyEntities(Entity->CurrentPolyRef, MaxNum);
-    if(NeibourEntities.Num()==0)
-    {
-        //UE_LOG(LogTemp, Warning, TEXT("No neibour entities found for PolyRef: %llu"), Entity->CurrentPolyRef);
-        return;
-    }
-    for (const FMassEntityHandle& NeibourEntity : NeibourEntities)
-    {
-		UE_LOG(LogTemp, Log, TEXT("Neibour Entity Handle: %llu"), NeibourEntity.AsNumber());
-	}
-}
 
-void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVector& NeiRepel)
+
+void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector& NeiRepel)
 {
     bool DebugDraw = true;
     NeiRepel = FVector::ZeroVector;
     float TotalWeight = 0;
 
-	if (!EntityActor) 
-    {
-		UE_LOG(LogTemp, Warning, TEXT("EntityActor is null! Cannot get force from neibours."));
-        return;
-    }
     if(!FlowFieldSubsystem)
     {
         UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem not found! Cannot get force from neibours."));
         return;
 	}
-	FNavPolyFlow CurPoly =FlowFieldByPoly.FindRef(EntityActor->CurrentPolyRef); // 确保当前多边形存在
+	
     
-    TArray<FMassEntityHandle> NeibourEntities = FlowFieldSubsystem->GetPolyEntities(EntityActor->CurrentPolyRef, 10);
-    if(NeibourEntities.Num()==0)
+    TMap<FMassEntityHandle,FVector> NeibourEntityLocs = FlowFieldSubsystem->GetPolyEntities(CurPolyRef, 10);
+    if(NeibourEntityLocs.Num()==0)
     {
         //UE_LOG(LogTemp, Warning, TEXT("No neibour entities found for PolyRef: %llu"), EntityActor->CurrentPolyRef);
         return;
     }
-	NeibourEntities.Remove(EntityActor->EntityHandle); // 移除自身实体
+	//TODO: 这里是上一帧的位置，和当前的位置存在微小偏差
+	FVector EntityLoc = NeibourEntityLocs.FindRef(EntityHandle); // 获取自身实体位置
 
-    if (NeibourEntities.Num() == 0)
+    NeibourEntityLocs.Remove(EntityHandle); // 移除自身实体
+
+    if (NeibourEntityLocs.Num() == 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("EntityActor ID: %d, Get NeibourEntities Count: %d"), EntityActor->EntityID, NeibourEntities.Num());
+        UE_LOG(LogTemp, Log, TEXT("CurEntity:%llu Get NeibourEntities Count: %d"), EntityHandle.AsNumber(), NeibourEntityLocs.Num());
         return;
     }
 
     int NeiCount = 0;
-    for (const FMassEntityHandle& NeibourEntity : NeibourEntities)
+    for (const auto& NeibourEntityLoc : NeibourEntityLocs)
     {
-        AEntityActor* NeiEntityActor =FlowFieldSubsystem->EntityToActor.FindRef(NeibourEntity);
-        if (!NeiEntityActor)
         {
-			UE_LOG(LogTemp, Warning, TEXT("NeibourEntityActor not found for EntityHandle: %llu"), NeibourEntity.AsNumber());
-            return;
-        }
-        {
-			FVector DistVector = NeiEntityActor->GetActorLocation()- EntityActor->GetActorLocation();
+			FVector DistVector = NeibourEntityLoc.Value - EntityLoc;
 			float Distance = DistVector.Length();
 
 			if (Distance < DistTolenrance)
             {
-				//UE_LOG(LogTemp, Warning, TEXT("Found a Neibour:%d. Distance: %f"), NeiEntityActor->EntityID, Distance);
+				UE_LOG(LogTemp, Warning, TEXT("Found a NeibourLoc:%llu with Loc:%s. Distance: %f"), 
+                    NeibourEntityLoc.Key.AsNumber(), *NeibourEntityLoc.Value.ToString(), Distance);
+
                 NeiCount++;
 
                 float Weight = FMath::Clamp(1.0f / Distance,0.00001,5); // 限制最小权重
@@ -568,14 +540,14 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
                 {
                     DrawDebugLine(
                         GetWorld(),
-                        EntityActor->GetActorLocation(),
-                        NeiEntityActor->GetActorLocation(),
+                        EntityLoc,
+                        NeibourEntityLoc.Value,
                         FColor::Green, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 1.5f);
 
                     DrawDebugDirectionalArrow(
                         GetWorld(),
-                        EntityActor->GetActorLocation(),
-                        EntityActor->GetActorLocation() + 100.0*Force,
+                        EntityLoc,
+                        NeibourEntityLoc.Value + 100.0*Force,
                         30.f, FColor::Red, false, GetWorld()->GetDeltaSeconds()+0.001, 0, 1.5f);
                 }
             }
@@ -583,6 +555,8 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
     }
     if (NeiCount == 0)
         return;
+
+    FNavPolyFlow CurPoly = FlowFieldByPoly.FindRef(CurPolyRef); 
 
     NeiRepel = NeiRepel / TotalWeight/ NeiCount; // 平均化力
 	NeiRepel = FVector::VectorPlaneProject(NeiRepel, CurPoly.PolyNormal); // 投影到多边形平面上
@@ -592,11 +566,13 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(AEntityActor* EntityActor, FVe
     {
         DrawDebugDirectionalArrow(
             GetWorld(),
-            EntityActor->GetActorLocation(),
-            EntityActor->GetActorLocation() + NeiRepel,
-            30.f, FColor::Magenta, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 1.5f);
+            EntityLoc,
+            EntityLoc + NeiRepel,
+            30.f, FColor::Black, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 1.5f);
     }
 }
+
+
 
 void AFlowFieldVoxelBuilder::RegistryNeibourSubsystem()
 {
@@ -616,7 +592,7 @@ FVector AFlowFieldVoxelBuilder::DeltaMove(AEntityActor* Agent, UPARAM(ref)FVecto
 
 
 	FVector NeiRepel = FVector::ZeroVector;
-	GetForceFromNeibours(Agent, NeiRepel);
+	GetForceFromNeibours(Agent->CurrentPolyRef, Agent->GetActorLocation(), NeiRepel);
 
     FVector RepelForce = FVector::ZeroVector;
     FVector GuidanceForce = FVector::ZeroVector;

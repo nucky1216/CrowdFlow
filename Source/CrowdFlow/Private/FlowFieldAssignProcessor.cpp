@@ -24,14 +24,13 @@ void UFlowFieldAssignProcessor::Execute(FMassEntityManager& EntityManager, FMass
 {
     UE_LOG(LogTemp,Log,TEXT("Assign Processor Running....."));
 
-    AFlowFieldVoxelBuilder* FlowField = nullptr;
-    if (UFlowFieldSubsystem* Subsystem = Context.GetWorld()->GetSubsystem<UFlowFieldSubsystem>())
-    {
-        FlowField = Subsystem->GetFlowField();
     
-    }
+    UFlowFieldNeiboursSubsystem* Subsystem = Context.GetWorld()->GetSubsystem<UFlowFieldNeiboursSubsystem>();
+    Subsystem->InitialForMass();
 
-    if (!FlowField)
+
+    AFlowFieldVoxelBuilder* FlowField = Subsystem->FlowFieldBuilder;
+    if (!IsValid(FlowField))
     {
 		UE_LOG(LogTemp, Warning, TEXT("FlowFieldVoxelBuilder not found in the world! Please ensure it is placed in the level."));
         return;
@@ -44,7 +43,13 @@ void UFlowFieldAssignProcessor::Execute(FMassEntityManager& EntityManager, FMass
             for (int i =0;i<Context.GetNumEntities();i++)
             {
                 FlowFieldRefs[i].FlowField = FlowField;
-				FVector Location = TransformRefs[i].GetTransform().GetLocation();
+				//FlowFieldRefs[i].NeiboursSubsystem = Subsystem;
+
+                FVector Location = TransformRefs[i].GetTransform().GetLocation();
+
+                //dtPolyRef newPolyRef=FlowField->GetPolyRef(Location, FVector(FlowField->VoxelSize/2));
+                //Subsystem->UpdatePolyEntity(newPolyRef,FlowFieldRefs[i].CurrentPolyRef,Context.GetEntity(i));
+
 				UE_LOG(LogTemp, Log, TEXT("Assigning FlowField to entity at location: %d->%s"),i, *Location.ToString());
             }
         });
