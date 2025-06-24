@@ -41,6 +41,7 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
        UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem is null"));
        return;
 	}
+	TArray<FMassEntityHandle> EntitiesToRemove;
 
     EntityQuery.ForEachEntityChunk(EntityManager, Context, [&](FMassExecutionContext& Context)
         {
@@ -60,11 +61,7 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 				FMassEntityHandle CurEntityHandle=Context.GetEntity(i);  // 获取实体句柄
                 FVector Position = Transforms[i].GetTransform().GetLocation();
 
-                if(Position.ContainsNaN())
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("Entity contain NaN position"), i);
-                    continue;  
-				}
+             
 
                // FMassMoveTargetFragment MoveTarget=MoveTargets[i];
                 AFlowFieldVoxelBuilder* FlowField = FlowFields[i].FlowField;
@@ -73,20 +70,27 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 int32 MaxNeibourNum = FlowFields[i].MaxSearchNeibourNum;
                 dtPolyRef CurPolyRef = FlowFields[i].CurrentPolyRef;
 
-
                 if(!FlowField)
                 {
                     UE_LOG(LogTemp, Warning, TEXT("FlowField is null for entity %d"), i);
                     continue;  // 如果流场为空，跳过此实体
 				}
 
+                if ((FlowField->TargetLocation-Position).Length()<100.f)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("Reach Target"));
+					EntitiesToRemove.Add(CurEntityHandle);  // 如果到达目标位置，添加到删除列表
+                    continue;
+                }
+
                 FVector DebugGuidanceForce, DebugPlaneForce, DebugRepelForce;
                 dtPolyRef PolyRef=0;
                 FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value,
                     DebugRepelForce,DebugGuidanceForce,DebugPlaneForce);  // 获取流场力
 
+				//FMassEntityHandle CurEntityHandle = Context.GetEntity(i);  // 获取当前实体句柄
 				FVector NeiRepelForce = FVector::ZeroVector;
-                FlowField->GetForceFromNeibours(CurPolyRef,Position, NeiRepelForce);
+                FlowField->GetForceFromNeibours(CurPolyRef, CurEntityHandle,NeiRepelForce);
 
 				FlowForce += NeiRepelForce;  // 添加邻居的排斥力
 
@@ -94,4 +98,9 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 Vels[i].Value= Velocity.GetClampedToSize(0, MaxSpeed);
             }
         });
+
+    if(EntitiesToRemove.Num() > 0)
+    {
+		EntityManager.Defer().DestroyEntities(EntitiesToRemove);  // 异步批量删除到达目标的实体
+	}
 }

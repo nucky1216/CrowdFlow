@@ -37,12 +37,19 @@ void UCrowdGenerator::Generate(UObject& QueryOwner,
         FMassTransformsSpawnData& Transforms = Result.SpawnData.GetMutable<FMassTransformsSpawnData>();
 
         Transforms.Transforms.Reserve(Result.NumEntities);
-        for (int i = 0; i < Result.NumEntities&& i<SpawnedKey.Num(); i++)
+        int32 SpawnedCount = 0;
+        for (int32 i = 0; SpawnedCount < Result.NumEntities; i++)
         {
             FTransform& Transform = Transforms.Transforms.AddDefaulted_GetRef();
-            FVector PolyCenter = FlowFieldBuilder->GetFlowCenter(SpawnedKey[i]);
-			UE_LOG(LogTemp, Log, TEXT("PolyCenter: %s"), *PolyCenter.ToString());
-            Transform.SetLocation(PolyCenter);
+            FVector RandomPoint = FlowFieldBuilder->GetRandomPointInPoly(SpawnedKey[i% SpawnedKey.Num()]);
+
+            if (RandomPoint.IsZero())
+                continue;
+
+			UE_LOG(LogTemp, Log, TEXT("PolyCenter: %s"), *RandomPoint.ToString());
+            Transform.SetLocation(RandomPoint);
+			SpawnedCount++;
+            
         }
     }
 

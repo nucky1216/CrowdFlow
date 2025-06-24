@@ -12,6 +12,7 @@
 #include "HAL/IConsoleManager.h"
 #include "EntityActor.h"
 #include "FlowFieldNeiboursSubsystem.h"
+#include <Detour\DetourNavMeshQuery.h>
 
 
 #define DEBUG_DRAW 1
@@ -512,7 +513,7 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEnt
 
     if (NeibourEntityLocs.Num() == 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("CurEntity:%llu Get NeibourEntities Count: %d"), EntityHandle.AsNumber(), NeibourEntityLocs.Num());
+        //UE_LOG(LogTemp, Log, TEXT("CurEntity:%llu Get NeibourEntities Count: %d"), EntityHandle.AsNumber(), NeibourEntityLocs.Num());
         return;
     }
 
@@ -525,8 +526,8 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEnt
 
 			if (Distance < DistTolenrance)
             {
-				UE_LOG(LogTemp, Warning, TEXT("Found a NeibourLoc:%llu with Loc:%s. Distance: %f"), 
-                    NeibourEntityLoc.Key.AsNumber(), *NeibourEntityLoc.Value.ToString(), Distance);
+				//UE_LOG(LogTemp, Warning, TEXT("Found a NeibourLoc:%llu with Loc:%s. Distance: %f"), 
+                //                NeibourEntityLoc.Key.AsNumber(), *NeibourEntityLoc.Value.ToString(), Distance);
 
                 NeiCount++;
 
@@ -592,7 +593,7 @@ FVector AFlowFieldVoxelBuilder::DeltaMove(AEntityActor* Agent, UPARAM(ref)FVecto
 
 
 	FVector NeiRepel = FVector::ZeroVector;
-	GetForceFromNeibours(Agent->CurrentPolyRef, Agent->GetActorLocation(), NeiRepel);
+	GetForceFromNeibours(Agent->CurrentPolyRef, Agent->EntityHandle, NeiRepel);
 
     FVector RepelForce = FVector::ZeroVector;
     FVector GuidanceForce = FVector::ZeroVector;
@@ -625,6 +626,33 @@ FVector AFlowFieldVoxelBuilder::GetFlowCenter(dtPolyRef PolyRef) const
     }
 	UE_LOG(LogTemp, Warning, TEXT("PolyRef not found or invalid! PolyRef: %llu"), PolyRef);
     return FVector::ZeroVector;
+}
+
+FVector AFlowFieldVoxelBuilder::GetRandomPointInPoly(dtPolyRef PolyRef) const
+{
+	FVector RandomPoint = FVector::ZeroVector;
+
+    const ANavigationData* NavData = UNavigationSystemV1::GetCurrent(GetWorld())->
+        GetDefaultNavDataInstance(FNavigationSystem::ECreateIfEmpty::Create);
+
+	if (!NavData)
+    {
+		UE_LOG(LogTemp, Warning, TEXT("Navigation Data not found! Cannot get random point in poly."));
+        return FVector::ZeroVector;
+    }
+
+    const ARecastNavMesh* RecastNavMesh = Cast<ARecastNavMesh>(NavData);
+    if(!RecastNavMesh)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RecastNavMesh not found! Cannot get random point in poly."));
+        return FVector::ZeroVector;
+	}
+
+    if(RecastNavMesh->GetRandomPointInPoly(PolyRef, RandomPoint))
+    {
+		return RandomPoint;
+    }
+	return FVector::ZeroVector; // 如果没有找到随机点，则返回零向量
 }
 
 dtPolyRef AFlowFieldVoxelBuilder::GetPolyRef(const FVector& Location, FVector ProjectExtent) const

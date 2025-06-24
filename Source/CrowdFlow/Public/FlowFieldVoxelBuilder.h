@@ -198,6 +198,8 @@ public:
 
 	FVector GetFlowCenter(dtPolyRef PolyRef) const;
 
+	FVector GetRandomPointInPoly(dtPolyRef PolyRef) const;
+
 	dtPolyRef GetPolyRef(const FVector& Location, FVector ProjectExtent) const;
 protected:
 	// Called when the game starts or when spawned

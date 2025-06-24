@@ -182,15 +182,15 @@ TMap<FMassEntityHandle,FVector> UFlowFieldNeiboursSubsystem::GetPolyEntities(dtP
 	const TMap<FMassEntityHandle, FVector>* Neibours = PolyNeibours.Find(PolyRef);
 	if (Neibours != nullptr)
 	{
-		int32 i = 0;
+		int32 num = 0;
 		for( auto Pair: *Neibours)
 		{
-			if(i >= MaxNum)
+			if(num >= MaxNum)
 			{
 				break;
 			}
 			OutNeibours.Add(Pair.Key, Pair.Value);
-			i++;
+			num++;
 		}
 
 		if(OutNeibours.Num()<MaxNum)
