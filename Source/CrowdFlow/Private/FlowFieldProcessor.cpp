@@ -34,6 +34,8 @@ void UFlowFieldProcessor::ConfigureQueries()
 
 void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+    bool DebugDraw = false;
+
     UE_LOG(LogTemp, Log, TEXT("Process Running"));
     UFlowFieldNeiboursSubsystem* FlowFieldNeiboursSubsystem = UWorld::GetSubsystem<UFlowFieldNeiboursSubsystem>(Context.GetWorld());
     if(!FlowFieldNeiboursSubsystem)
@@ -88,14 +90,19 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value,
                     DebugRepelForce,DebugGuidanceForce,DebugPlaneForce);  // 获取流场力
 
-				//FMassEntityHandle CurEntityHandle = Context.GetEntity(i);  // 获取当前实体句柄
-				FVector NeiRepelForce = FVector::ZeroVector;
-                FlowField->GetForceFromNeibours(CurPolyRef, CurEntityHandle,NeiRepelForce);
+				//FVector NeiRepelForce = FVector::ZeroVector;
+    //            FlowField->GetForceFromNeibours(CurPolyRef, CurEntityHandle, Vels[i].Value,NeiRepelForce, MaxNeibourNum);
 
-				FlowForce += NeiRepelForce;  // 添加邻居的排斥力
+				//FlowForce += NeiRepelForce;  // 添加邻居的排斥力
+
+                if (DebugDraw)
+                {
+					DrawDebugDirectionalArrow(Context.GetWorld(), Position, Position+2.0*FlowForce,
+                        120,FColor::Blue, false, Context.GetWorld()->GetDeltaSeconds()+0.001, 0, 5.0f);
+                }
 
 				FVector Velocity=Vels[i].Value + FlowForce/Mass * DeltaTime;  // 施加流场方向的力，数值可调
-                Vels[i].Value= Velocity.GetClampedToSize(0, MaxSpeed);
+                Vels[i].Value= Velocity.GetClampedToSize(0, MaxSpeed);              
             }
         });
 

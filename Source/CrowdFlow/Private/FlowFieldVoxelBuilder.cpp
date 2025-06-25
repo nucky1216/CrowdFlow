@@ -387,7 +387,7 @@ void AFlowFieldVoxelBuilder::DebugDrawSinglePoly(FString PolyRef)
 FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector CurVelocity, 
     FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, FVector ProjectExtent) 
 {
-
+	bool DebugDraw = false;
     GuidanceForce = FVector::ZeroVector;
     RepelForce = FVector::ZeroVector;
     PlaneForce = FVector::ZeroVector;
@@ -412,7 +412,7 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
     // 计算邻接多边形的平均流向
     //FVector GuidanceForce = FVector::ZeroVector;
     GuidanceForce = FVector::ZeroVector;
-    if (1)
+    if (0)
     {
         float TotalWeight = 0;
 
@@ -439,7 +439,8 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
         //UE_LOG(LogTemp, Log, TEXT("Add RepelStrength...has %d Boundary"),BoundaryCount);
 
         float DistToBoundary = 1.0;
-        FVector EdgeNormal = FVector::ZeroVector;
+        RepelForce = FVector::ZeroVector;
+		float TotalWeight = 0.0f;
         for (int32 k = 0; k < BoundaryCount; k++)
         {
             int32 EdgeIndex = CurPolyFlow->BoundaryEdge[k];
@@ -447,22 +448,23 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
             FVector End = CurPolyFlow->PolyVerts[(EdgeIndex + 1) % CurPolyFlow->PolyVerts.Num()];
 
             FVector intersectionPoint;
-			//TODO: 可能同时与多条边相交
+            //TODO: 可能同时与多条边相交
             if (IsSegmentInOrIntersectCircle2D(Start, End, Location, AgentRadius))
             {
-                DistToBoundary = FMath::PointDistToSegment(Location, Start, End);
-                EdgeNormal = CurPolyFlow->BoundaryEdgeNormal[k];
-                break;
+                float Dist = FMath::PointDistToSegment(Location, Start, End); // 计算点到线段的距离
+                float weight = 1.0f / Dist; // 使用距离的倒数作为权重
+
+                RepelForce += CurPolyFlow->BoundaryEdgeNormal[k] * weight * RepelForceStrength;
+                TotalWeight += weight;
             }
         }
 
-        // 3. 施加反向矢量
-        float WeightDist = RepelForceStrength / DistToBoundary; // 距离越近，反作用越大
-        RepelForce = EdgeNormal * WeightDist;
-        //UE_LOG(LogTemp, Log, TEXT("DistToBoundary: %f, WeightDist: %f RepelForce:%s"), DistToBoundary, WeightDist, *RepelForce.ToString());
-
-
-    }
+        if (TotalWeight != 0)
+        {
+            RepelForce = (RepelForce / TotalWeight);// .GetClampedToSize(0, 10 * RepelForceStrength);
+        }
+        
+     }
 
 
     //垂直修正力
@@ -480,6 +482,27 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
 
     FlowDirection = (FlowDirection + GuidanceForce + RepelForce + PlaneForce);
 
+    if (DebugDraw)
+    {
+        float lenth = 2.0;
+	
+		//Draw GuidanceForce
+        DrawDebugDirectionalArrow(GetWorld(), Location, Location + GuidanceForce * lenth,
+            100.0, FColor::Purple, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 10);
+
+		//Draw RepelForce
+        DrawDebugDirectionalArrow(GetWorld(), Location, Location + RepelForce * lenth,
+			100.0, FColor::Red, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 10);
+
+		//Draw PlaneForce
+        DrawDebugDirectionalArrow(GetWorld(), Location, Location + PlaneForce * lenth,
+            100.0, FColor::White, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 10);
+
+		//Draw Final Force
+        DrawDebugDirectionalArrow(GetWorld(), Location, Location + FlowDirection * lenth,
+			100.0, FColor::Green, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 10);
+    }
+
     return FlowDirection;
 }
 
@@ -487,89 +510,63 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
 
 
 
-void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector& NeiRepel)
+void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector EntityVel, FVector& NeiRepel, int32 MaxNum)
 {
-    bool DebugDraw = true;
+    const bool bDebugDraw = true;
     NeiRepel = FVector::ZeroVector;
-    float TotalWeight = 0;
 
-    if(!FlowFieldSubsystem)
+    if (!FlowFieldSubsystem)
     {
-        UE_LOG(LogTemp, Warning, TEXT("FlowFieldNeiboursSubsystem not found! Cannot get force from neibours."));
-        return;
-	}
-	
-    
-    TMap<FMassEntityHandle,FVector> NeibourEntityLocs = FlowFieldSubsystem->GetPolyEntities(CurPolyRef, 10);
-    if(NeibourEntityLocs.Num()==0)
-    {
-        //UE_LOG(LogTemp, Warning, TEXT("No neibour entities found for PolyRef: %llu"), EntityActor->CurrentPolyRef);
-        return;
-    }
-	//TODO: 这里是上一帧的位置，和当前的位置存在微小偏差
-	FVector EntityLoc = NeibourEntityLocs.FindRef(EntityHandle); // 获取自身实体位置
-
-    NeibourEntityLocs.Remove(EntityHandle); // 移除自身实体
-
-    if (NeibourEntityLocs.Num() == 0)
-    {
-        //UE_LOG(LogTemp, Log, TEXT("CurEntity:%llu Get NeibourEntities Count: %d"), EntityHandle.AsNumber(), NeibourEntityLocs.Num());
+        UE_LOG(LogTemp, Warning, TEXT("FlowFieldSubsystem is null."));
         return;
     }
 
-    int NeiCount = 0;
-    for (const auto& NeibourEntityLoc : NeibourEntityLocs)
+    TMap<FMassEntityHandle, FVector> EntityLocations = FlowFieldSubsystem->GetPolyEntities(CurPolyRef, MaxNum);
+    if (EntityLocations.Num() <= 1) return;
+
+    const FVector EntityLoc = EntityLocations.FindRef(EntityHandle);
+    EntityLocations.Remove(EntityHandle);
+
+    const FNavPolyFlow* CurPoly = FlowFieldByPoly.Find(CurPolyRef);
+    if (!CurPoly) return;
+
+    const float DesiredDistance = 120.f;           // 实体之间的理想最小距离
+    const float A = 100.f;                         // 排斥力最大强度（缩放因子）
+    const float B = 500.f;                          // 衰减系数
+    const float MaxRepelForce = NeibourRepel;            // 限制总排斥力强度
+
+    for (const auto& Pair : EntityLocations)
     {
+        const FVector OtherLoc = Pair.Value;
+        FVector Offset = OtherLoc - EntityLoc;
+        Offset = FVector::VectorPlaneProject(Offset, CurPoly->PolyNormal);
+
+        float Distance = Offset.Size();
+        if (Distance <= KINDA_SMALL_NUMBER) continue;
+
+        // 用于方向相关权重（模拟注意力在正前方）
+        float CosAngle = Offset.GetSafeNormal().Dot(EntityVel.GetSafeNormal());
+        float AngularWeight = FMath::Clamp((CosAngle - 0.2f) / 0.8f, 0.f, 1.f); // 只对前方 0~70° 有效
+
+        // 社会力模型中的指数式排斥力
+        float ForceMag = A * FMath::Exp(-(Distance - DesiredDistance) / B);
+        FVector Force = -Offset.GetSafeNormal() * ForceMag * AngularWeight;
+
+        NeiRepel += Force;
+
+        if (bDebugDraw)
         {
-			FVector DistVector = NeibourEntityLoc.Value - EntityLoc;
-			float Distance = DistVector.Length();
-
-			if (Distance < DistTolenrance)
-            {
-				//UE_LOG(LogTemp, Warning, TEXT("Found a NeibourLoc:%llu with Loc:%s. Distance: %f"), 
-                //                NeibourEntityLoc.Key.AsNumber(), *NeibourEntityLoc.Value.ToString(), Distance);
-
-                NeiCount++;
-
-                float Weight = FMath::Clamp(1.0f / Distance,0.00001,5); // 限制最小权重
-				TotalWeight += Weight;
-                //FVector Force = -FVector::CrossProduct(FVector::CrossProduct(DistVector, EntityActor->Velocity), DistVector);
-				//FVector Force = -DistVector.GetSafeNormal() * Weight; // 使用距离的倒数作为权重
-                FVector Force = -DistVector.GetSafeNormal() * Weight * NeibourRepel; // 使用权重来调整力的大小
-                NeiRepel += Force;
-                if(DebugDraw)
-                {
-                    DrawDebugLine(
-                        GetWorld(),
-                        EntityLoc,
-                        NeibourEntityLoc.Value,
-                        FColor::Green, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 1.5f);
-
-                    DrawDebugDirectionalArrow(
-                        GetWorld(),
-                        EntityLoc,
-                        NeibourEntityLoc.Value + 100.0*Force,
-                        30.f, FColor::Red, false, GetWorld()->GetDeltaSeconds()+0.001, 0, 1.5f);
-                }
-            }
+            DrawDebugLine(GetWorld(), EntityLoc, OtherLoc, FColor::Green, false, GetWorld()->GetDeltaSeconds() + 0.01, 0, 1.5f);
+            DrawDebugDirectionalArrow(GetWorld(), EntityLoc, EntityLoc + Force * 0.1f, 50.f, FColor::Red, false, GetWorld()->GetDeltaSeconds() + 0.01, 0, 5.f);
         }
     }
-    if (NeiCount == 0)
-        return;
 
-    FNavPolyFlow CurPoly = FlowFieldByPoly.FindRef(CurPolyRef); 
+    // 限制总合力大小
+    NeiRepel = NeiRepel.GetClampedToMaxSize(MaxRepelForce);
 
-    NeiRepel = NeiRepel / TotalWeight/ NeiCount; // 平均化力
-	NeiRepel = FVector::VectorPlaneProject(NeiRepel, CurPoly.PolyNormal); // 投影到多边形平面上
-
-	//UE_LOG(LogTemp, Log, TEXT("EntityActor ID: %d, Neibour Count: %d, NeiRepel: %s"), EntityActor->EntityID, NeiCount, *NeiRepel.ToString());
-    if(DebugDraw)
+    if (bDebugDraw)
     {
-        DrawDebugDirectionalArrow(
-            GetWorld(),
-            EntityLoc,
-            EntityLoc + NeiRepel,
-            30.f, FColor::Black, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 1.5f);
+        DrawDebugDirectionalArrow(GetWorld(), EntityLoc, EntityLoc + NeiRepel * 0.1f, 100.f, FColor::Black, false, GetWorld()->GetDeltaSeconds() + 0.01, 0, 10.f);
     }
 }
 
@@ -593,7 +590,7 @@ FVector AFlowFieldVoxelBuilder::DeltaMove(AEntityActor* Agent, UPARAM(ref)FVecto
 
 
 	FVector NeiRepel = FVector::ZeroVector;
-	GetForceFromNeibours(Agent->CurrentPolyRef, Agent->EntityHandle, NeiRepel);
+	GetForceFromNeibours(Agent->CurrentPolyRef, Agent->EntityHandle,FVector(1,0,0),NeiRepel,15);
 
     FVector RepelForce = FVector::ZeroVector;
     FVector GuidanceForce = FVector::ZeroVector;

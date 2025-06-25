@@ -190,7 +190,7 @@ public:
 
 
 	//UFUNCTION(BlueprintCallable, Category = "FlowField | Poly | Force")
-	void GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector& NeiRepel);
+	void GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector EntityVel, FVector& NeiRepel,int32 MaxNum);
 
 
 	UFUNCTION(CallInEditor,BlueprintCallable, Category = "EntityNeibour")
