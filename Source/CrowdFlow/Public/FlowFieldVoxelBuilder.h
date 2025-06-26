@@ -40,6 +40,9 @@ struct FNavPolyFlow
 	UPROPERTY(BlueprintReadOnly)
 	FVector Center;
 
+	UPROPERTY(BlueprintReadOnly)
+	float Area;
+
 	TArray<dtPolyRef> EdgeNeibours;
 
 	TArray<dtPolyRef> VertNeibours;
@@ -125,6 +128,15 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
 	float NeibourRepel = 50.f;
 
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float NeibourRepelScale = 10.f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float NeibourDistanceScale = 1.f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float LowDensityForceStrength = 100.f;
+
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force | PlaneForce")
 	float SurfaceHeightTolerance = 10.f;
 
@@ -187,6 +199,8 @@ public:
 		FVector& RepelForce, FVector& GuidanceForce, FVector& PlaneForce, 
 		FVector ProjectExtent=FVector(50,50,200));
 
+
+	void GetLowDensityForce(dtPolyRef PolyRef,  FVector& LDForce);
 
 
 	//UFUNCTION(BlueprintCallable, Category = "FlowField | Poly | Force")

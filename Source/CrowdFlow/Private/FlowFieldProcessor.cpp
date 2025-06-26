@@ -86,14 +86,22 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 }
 
                 FVector DebugGuidanceForce, DebugPlaneForce, DebugRepelForce;
-                dtPolyRef PolyRef=0;
+
                 FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value,
                     DebugRepelForce,DebugGuidanceForce,DebugPlaneForce);  // 获取流场力
 
-				//FVector NeiRepelForce = FVector::ZeroVector;
-    //            FlowField->GetForceFromNeibours(CurPolyRef, CurEntityHandle, Vels[i].Value,NeiRepelForce, MaxNeibourNum);
+				FVector NeiRepelForce = FVector::ZeroVector;
+                FlowField->GetForceFromNeibours(CurPolyRef, CurEntityHandle, Vels[i].Value,NeiRepelForce, MaxNeibourNum);
 
-				//FlowForce += NeiRepelForce;  // 添加邻居的排斥力
+				FlowForce += NeiRepelForce;  // 添加邻居的排斥力
+
+                if (Vels[i].Value.Size() < MaxSpeed/2.0)
+                {
+                    FVector LDForce;
+                    FlowField->GetLowDensityForce(CurPolyRef, LDForce);
+
+					FlowForce += LDForce;  // 添加低密度力
+                }
 
                 if (DebugDraw)
                 {
