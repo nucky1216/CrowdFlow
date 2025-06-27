@@ -117,7 +117,14 @@ public:
 	float GuidanceForceStrength = 50.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
-	float RepelForceStrength = 100.0f;
+	float A_Wall = 100.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float B_Wall = 1.f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float Max_Wall = 1.f;
+
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
 	float PlaneForceStrength = 100.0f;
@@ -126,16 +133,26 @@ public:
 	float DistTolenrance = 300.f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
-	float NeibourRepel = 50.f;
+	float Max_Neibour = 50.f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
-	float NeibourRepelScale = 10.f;
+	float A_Neibour = 10.f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
-	float NeibourDistanceScale = 1.f;
+	float B_Neibour = 1.f;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
 	float LowDensityForceStrength = 100.f;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float DensityAngularScale = 1.f;
+
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float DensityScale;
+
+	UPROPERTY(EditAnywhere, Category = "Flow Field | Force")
+	float DensityRatio;
 
 	UPROPERTY(EditAnywhere, Category = "Flow Field | Force | PlaneForce")
 	float SurfaceHeightTolerance = 10.f;
@@ -200,9 +217,9 @@ public:
 		FVector ProjectExtent=FVector(50,50,200));
 
 
-	void GetLowDensityForce(dtPolyRef PolyRef,  FVector& LDForce);
+	void GetLowDensityForce(dtPolyRef PolyRef, FVector EntityLoc, FVector EntityVel, FVector& LDForce);
 
-
+	float GetPolyDensity(dtPolyRef PolyRef);
 	//UFUNCTION(BlueprintCallable, Category = "FlowField | Poly | Force")
 	void GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector EntityVel, FVector& NeiRepel,int32 MaxNum);
 

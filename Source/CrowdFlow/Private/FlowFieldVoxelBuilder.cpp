@@ -204,7 +204,7 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
 
                 VertToPolyMap.Add(PolyVert, PolyRef);
 
-                if (Poly->neis[k] == 0)
+                if ( Poly->neis[k] == 0 ) //Tile内没有邻接多边形
                 {
                     Flow.BoundaryEdge.Add(k);
                 }
@@ -213,25 +213,12 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
             }
             Flow.Center /= float(VertCount);
 
-            //计算边界法线向量
-            int32 BoundaryCount = Flow.BoundaryEdge.Num();
-            for (int32 k = 0; k < BoundaryCount; k++)
-            {
-                int32 EdgeIndex = Flow.BoundaryEdge[k];
-                FVector Edge0 = Flow.PolyVerts[(EdgeIndex + 1) % VertCount] - Flow.PolyVerts[EdgeIndex];
-                FVector Edge1 = Flow.PolyVerts[(EdgeIndex + 2) % VertCount] - Flow.PolyVerts[(EdgeIndex + 1) % VertCount];
-
-                FVector PolyNormal = FVector::CrossProduct(Edge0, Edge1).GetSafeNormal();
-                FVector InnerNormal = FVector::CrossProduct(PolyNormal, Edge0).GetSafeNormal();
-
-                Flow.BoundaryEdgeNormal.Add(InnerNormal.GetSafeNormal());
-            }
-
             //获取多边形边的邻接多边形
             for (unsigned int edgeIndex = 0; edgeIndex < Poly->vertCount; ++edgeIndex)
             {
                 if (Poly->neis[edgeIndex] & DT_EXT_LINK)
                 {
+                    bool hasNeibour = false;
                     // 外部链接（跨Tile），需要遍历Tile的links
                     for (unsigned int linkIndex = Poly->firstLink; linkIndex != DT_NULL_LINK;)
                     {
@@ -240,8 +227,14 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
                         {
                             //UE_LOG(LogTemp, Log, TEXT("Found external neighbor poly: %llu for poly: %llu"), link.ref, PolyRef);
                             Flow.EdgeNeibours.Add(link.ref);
+							hasNeibour = true;
                         }
+                       
                         linkIndex = link.next;
+                    }
+                    if (!hasNeibour)
+                    {
+                        Flow.BoundaryEdge.Add(edgeIndex);
                     }
                 }
                 else if (Poly->neis[edgeIndex])
@@ -256,6 +249,19 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
                 }
             }
 
+            //计算边界法线向量
+            int32 BoundaryCount = Flow.BoundaryEdge.Num();
+            for (int32 k = 0; k < BoundaryCount; k++)
+            {
+                int32 EdgeIndex = Flow.BoundaryEdge[k];
+                FVector Edge0 = Flow.PolyVerts[(EdgeIndex + 1) % VertCount] - Flow.PolyVerts[EdgeIndex];
+                FVector Edge1 = Flow.PolyVerts[(EdgeIndex + 2) % VertCount] - Flow.PolyVerts[(EdgeIndex + 1) % VertCount];
+
+                FVector PolyNormal = FVector::CrossProduct(Edge0, Edge1).GetSafeNormal();
+                FVector InnerNormal = FVector::CrossProduct(PolyNormal, Edge0).GetSafeNormal();
+
+                Flow.BoundaryEdgeNormal.Add(InnerNormal.GetSafeNormal());
+            }
 
             FNavLocation NavLoc;
             if (!NavSys->ProjectPointToNavigation(Flow.Center, NavLoc))
@@ -283,7 +289,7 @@ void AFlowFieldVoxelBuilder::GenerateFlowFieldPoly()
 
                 Flow.bIsValid = true;
 
-				Flow.Area = CalcPolygonArea3D(Flow.PolyVerts);
+				Flow.Area = CalcPolygonArea3D(Flow.PolyVerts) / 10000.f; //cm^2 --> m^2
 
             }
 
@@ -495,29 +501,24 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
 
         float DistToBoundary = 1.0;
         RepelForce = FVector::ZeroVector;
-		float TotalWeight = 0.0f;
         for (int32 k = 0; k < BoundaryCount; k++)
         {
             int32 EdgeIndex = CurPolyFlow->BoundaryEdge[k];
             FVector Start = CurPolyFlow->PolyVerts[EdgeIndex];
             FVector End = CurPolyFlow->PolyVerts[(EdgeIndex + 1) % CurPolyFlow->PolyVerts.Num()];
 
-            FVector intersectionPoint;
-            //TODO: 可能同时与多条边相交
-            if (IsSegmentInOrIntersectCircle2D(Start, End, Location, AgentRadius))
-            {
-                float Dist = FMath::PointDistToSegment(Location, Start, End); // 计算点到线段的距离
-                float weight = 1.0f / Dist; // 使用距离的倒数作为权重
+			
+            FVector ClosestPointAtEdge = FMath::ClosestPointOnSegment(Location, Start, End);
+         
+			FVector EdgeToEntity = (Location-ClosestPointAtEdge);
 
-                RepelForce += CurPolyFlow->BoundaryEdgeNormal[k] * weight * RepelForceStrength;
-                TotalWeight += weight;
-            }
+            FVector BoundaryRepel = A_Wall * FMath::Exp((AgentRadius - EdgeToEntity.Size()) / B_Wall) * EdgeToEntity.GetSafeNormal();;
+
+            RepelForce += FVector::VectorPlaneProject(BoundaryRepel, CurPolyFlow->PolyNormal);
         }
 
-        if (TotalWeight != 0)
-        {
-            RepelForce = (RepelForce / TotalWeight);// .GetClampedToSize(0, 10 * RepelForceStrength);
-        }
+        RepelForce = RepelForce.GetClampedToMaxSize(Max_Wall);// .GetClampedToSize(0, 10 * RepelForceStrength);
+        
         
      }
 
@@ -561,7 +562,7 @@ FVector AFlowFieldVoxelBuilder::GetFlowByPoly(const FVector& Location, FVector C
     return FlowDirection;
 }
 
-void AFlowFieldVoxelBuilder::GetLowDensityForce(dtPolyRef PolyRef, FVector& LDForce)
+void AFlowFieldVoxelBuilder::GetLowDensityForce(dtPolyRef PolyRef,FVector EntityLoc, FVector EntityVel, FVector& LDForce)
 {
     bool DebugDraw = true;
 	LDForce = FVector::ZeroVector;
@@ -581,10 +582,23 @@ void AFlowFieldVoxelBuilder::GetLowDensityForce(dtPolyRef PolyRef, FVector& LDFo
 
     float MinDestity = CurDenstiy;
 	dtPolyRef MinDensityPolyRef = PolyRef;
+	FVector CurFlowDirection = CurPoly->FlowDirection;
+    FVector CurCenter = CurPoly->Center;
+
     for(auto NeibourPolyRef:CurPoly->VertNeibours)
     {
 		FNavPolyFlow* NeibourPoly = FlowFieldByPoly.Find(NeibourPolyRef);
-		float NeibourDensity = FlowFieldSubsystem->PolyNeibours.FindRef(NeibourPolyRef).Num() / NeibourPoly->Area;
+
+		FVector NeibourFlow = NeibourPoly->FlowDirection;
+		float AngluarWeight = FMath::Acos((NeibourPoly->Center- CurCenter).GetSafeNormal().Dot(CurFlowDirection.GetSafeNormal()));
+
+		//FVector NeibourCenter = NeibourPoly->Center;
+  //      if (CurFlowDirection.Dot(NeibourCenter - EntityLoc) <= 0)
+  //          continue;
+		float NeibourDensity = (DensityAngularScale*AngluarWeight+FlowFieldSubsystem->PolyNeibours.FindRef(NeibourPolyRef).Num() )/ NeibourPoly->Area;
+
+        //float NeibourDensity = FlowFieldSubsystem->PolyNeibours.FindRef(NeibourPolyRef).Num() / NeibourPoly->Area;
+
         if(NeibourDensity < MinDestity)
         {
             MinDestity = NeibourDensity;
@@ -607,9 +621,30 @@ void AFlowFieldVoxelBuilder::GetLowDensityForce(dtPolyRef PolyRef, FVector& LDFo
     
 }
 
+float AFlowFieldVoxelBuilder::GetPolyDensity(dtPolyRef PolyRef)
+{
+
+    if (!FlowFieldSubsystem)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FlowFieldSubsystem is null."));
+        return 1.0;
+    }
+    FNavPolyFlow* CurPoly = FlowFieldByPoly.Find(PolyRef);
+    if (!CurPoly)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PolyRef not found or invalid! PolyRef: %llu"), PolyRef);
+        return 1.0;
+	}
+    int32 Num = FlowFieldSubsystem->PolyNeibours.FindRef(PolyRef).Num();
+    
+	float Density = (Num * FMath::Pow(AgentRadius, 2) * PI) / CurPoly->Area; // 计算密度，单位为每平方米的实体数
+
+	return DensityRatio*FMath::Exp(-Density / DensityScale);
+}
+
 void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEntityHandle EntityHandle, FVector EntityVel, FVector& NeiRepel, int32 MaxNum)
 {
-    const bool bDebugDraw = true;
+    const bool bDebugDraw = false;
     NeiRepel = FVector::ZeroVector;
 
     if (!FlowFieldSubsystem)
@@ -627,11 +662,6 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEnt
     const FNavPolyFlow* CurPoly = FlowFieldByPoly.Find(CurPolyRef);
     if (!CurPoly) return;
 
-    const float DesiredDistance = AgentRadius;           // 实体之间的理想最小距离
-    const float A = NeibourRepelScale;                         // 排斥力最大强度（缩放因子）
-    const float B = NeibourDistanceScale;                          // 衰减系数
-    const float MaxRepelForce = NeibourRepel;            // 限制总排斥力强度
-
     for (const auto& Pair : EntityLocations)
     {
         const FVector OtherLoc = Pair.Value;
@@ -641,13 +671,16 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEnt
         float Distance = Offset.Size();
         if (Distance <= KINDA_SMALL_NUMBER) continue;
 
+        if (Offset.Dot(EntityVel) <= 0)
+            continue;
+
         // 用于方向相关权重（模拟注意力在正前方）
-        float CosAngle = Offset.GetSafeNormal().Dot(EntityVel.GetSafeNormal());
-        float AngularWeight = FMath::Clamp((CosAngle - 0.2f) / 0.8f, 0.f, 1.f); // 只对前方 0~70° 有效
+        //float CosAngle = Offset.GetSafeNormal().Dot(EntityVel.GetSafeNormal());
+        //float AngularWeight = FMath::Clamp((CosAngle - 0.2f) / 0.8f, 0.f, 1.f); // 只对前方 0~70° 有效
 
         // 社会力模型中的指数式排斥力
-        float ForceMag = NeibourRepelScale * FMath::Exp(-(Distance-AgentRadius*2.0) / NeibourDistanceScale);
-        FVector Force = -Offset.GetSafeNormal() * ForceMag * AngularWeight;
+        float ForceMag = A_Neibour * FMath::Exp(-(Distance-AgentRadius*2.2) / B_Neibour);
+        FVector Force = FVector::VectorPlaneProject( - Offset.GetSafeNormal(),CurPoly->PolyNormal) * ForceMag;// *AngularWeight;
 
         NeiRepel += Force;
 
@@ -659,7 +692,7 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEnt
     }
 
     // 限制总合力大小
-    NeiRepel = NeiRepel.GetClampedToMaxSize(MaxRepelForce);
+    NeiRepel = NeiRepel.GetClampedToMaxSize(Max_Neibour);
 
     if (bDebugDraw)
     {
@@ -668,8 +701,6 @@ void AFlowFieldVoxelBuilder::GetForceFromNeibours(dtPolyRef CurPolyRef, FMassEnt
 
  
 }
-
-
 
 void AFlowFieldVoxelBuilder::RegistryNeibourSubsystem()
 {

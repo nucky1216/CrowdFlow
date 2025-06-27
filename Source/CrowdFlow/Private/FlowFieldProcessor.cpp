@@ -90,17 +90,25 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                 FVector FlowForce =FlowField->GetFlowByPoly(Position, Vels[i].Value,
                     DebugRepelForce,DebugGuidanceForce,DebugPlaneForce);  // 获取流场力
 
-				FVector NeiRepelForce = FVector::ZeroVector;
-                FlowField->GetForceFromNeibours(CurPolyRef, CurEntityHandle, Vels[i].Value,NeiRepelForce, MaxNeibourNum);
+				//添加实体间的排斥力
+                if (1)
+                {
+                    FVector NeiRepelForce = FVector::ZeroVector;
+                    FlowField->GetForceFromNeibours(CurPolyRef, CurEntityHandle, Vels[i].Value, NeiRepelForce, MaxNeibourNum);
 
-				FlowForce += NeiRepelForce;  // 添加邻居的排斥力
+                    float scale = 1.f;// FlowField->GetPolyDensity(CurPolyRef);  // 获取当前多边形的密度
+                    FlowForce += NeiRepelForce* scale;  // 添加邻居的排斥力
+                }
 
-                if (Vels[i].Value.Size() < MaxSpeed/2.0)
+
+                //添加低密度力
+				float VelocityLength = Vels[i].Value.Size();
+                if (1 && VelocityLength < MaxSpeed/1.0)
                 {
                     FVector LDForce;
-                    FlowField->GetLowDensityForce(CurPolyRef, LDForce);
+                    FlowField->GetLowDensityForce(CurPolyRef, Position, Vels[i].Value, LDForce);
 
-					FlowForce += LDForce;  // 添加低密度力
+					FlowForce += LDForce ;  // 添加低密度力
                 }
 
                 if (DebugDraw)
@@ -108,6 +116,7 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 					DrawDebugDirectionalArrow(Context.GetWorld(), Position, Position+2.0*FlowForce,
                         120,FColor::Blue, false, Context.GetWorld()->GetDeltaSeconds()+0.001, 0, 5.0f);
                 }
+
 
 				FVector Velocity=Vels[i].Value + FlowForce/Mass * DeltaTime;  // 施加流场方向的力，数值可调
                 Vels[i].Value= Velocity.GetClampedToSize(0, MaxSpeed);              
