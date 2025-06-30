@@ -68,7 +68,8 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
                // FMassMoveTargetFragment MoveTarget=MoveTargets[i];
                 AFlowFieldVoxelBuilder* FlowField = FlowFields[i].FlowField;
                 float Mass = FlowFields[i].Mass; // 假设质量为1.0，实际应用中可以从实体中获取质量信息
-                float MaxSpeed = FlowFields[i].MaxSpeed;  // 获取最大速度
+                float DesiredSpeed = FlowFields[i].DesiredSpeed;  // 获取最大速度
+
                 int32 MaxNeibourNum = FlowFields[i].MaxSearchNeibourNum;
                 dtPolyRef CurPolyRef = FlowFields[i].CurrentPolyRef;
 
@@ -103,7 +104,7 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 
                 //添加低密度力
 				float VelocityLength = Vels[i].Value.Size();
-                if (1 && VelocityLength < MaxSpeed/1.0)
+                if (1 && VelocityLength < DesiredSpeed /1.0)
                 {
                     FVector LDForce;
                     FlowField->GetLowDensityForce(CurPolyRef, Position, Vels[i].Value, LDForce);
@@ -119,7 +120,7 @@ void UFlowFieldProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 
 
 				FVector Velocity=Vels[i].Value + FlowForce/Mass * DeltaTime;  // 施加流场方向的力，数值可调
-                Vels[i].Value= Velocity.GetClampedToSize(0, MaxSpeed);              
+                Vels[i].Value= Velocity.GetClampedToMaxSize( DesiredSpeed);
             }
         });
 

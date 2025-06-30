@@ -609,16 +609,15 @@ void AFlowFieldVoxelBuilder::GetLowDensityForce(dtPolyRef PolyRef,FVector Entity
     {
         FVector Center = GetFlowCenter(PolyRef);
         FVector NeibourCenter = GetFlowCenter(MinDensityPolyRef);
-		LDForce = (NeibourCenter-Center).GetSafeNormal() * LowDensityForceStrength * (CurDenstiy - MinDestity);
+		LDForce = (NeibourCenter- EntityLoc).GetSafeNormal() * LowDensityForceStrength * (CurDenstiy - MinDestity);
 
         if (DebugDraw)
         {
-            DrawDebugDirectionalArrow(GetWorld(), Center, Center + LDForce, 85,FColor::Orange, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 8);
+            DrawDebugDirectionalArrow(GetWorld(), EntityLoc, EntityLoc + LDForce, 85,FColor::Orange, false, GetWorld()->GetDeltaSeconds() + 0.001, 0, 8);
         }
         
 	}
-
-    
+        
 }
 
 float AFlowFieldVoxelBuilder::GetPolyDensity(dtPolyRef PolyRef)

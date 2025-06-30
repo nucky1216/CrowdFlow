@@ -38,7 +38,7 @@ void UFlowFieldAssignProcessor::Execute(FMassEntityManager& EntityManager, FMass
 
     EntityQuery.ForEachEntityChunk(EntityManager, Context, [&](FMassExecutionContext& Context)
         {
-            const TArrayView<FFlowFieldFragment> FlowFieldRefs = Context.GetMutableFragmentView<FFlowFieldFragment>();
+            const TArrayView<FFlowFieldFragment>& FlowFieldRefs = Context.GetMutableFragmentView<FFlowFieldFragment>();
 			const TArrayView<FTransformFragment> TransformRefs = Context.GetMutableFragmentView<FTransformFragment>();
             for (int i =0;i<Context.GetNumEntities();i++)
             {
@@ -46,6 +46,7 @@ void UFlowFieldAssignProcessor::Execute(FMassEntityManager& EntityManager, FMass
 				//FlowFieldRefs[i].NeiboursSubsystem = Subsystem;
 
                 FVector Location = TransformRefs[i].GetTransform().GetLocation();
+                FlowFieldRefs[i].DesiredSpeed = FMath::FRandRange(FlowFieldRefs[i].MinSpeed, FlowFieldRefs[i].MaxSpeed);
 
                 //dtPolyRef newPolyRef=FlowField->GetPolyRef(Location, FVector(FlowField->VoxelSize/2));
                 //Subsystem->UpdatePolyEntity(newPolyRef,FlowFieldRefs[i].CurrentPolyRef,Context.GetEntity(i));

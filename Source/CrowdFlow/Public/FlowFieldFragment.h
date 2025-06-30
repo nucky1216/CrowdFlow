@@ -26,6 +26,10 @@ struct CROWDFLOW_API FFlowFieldFragment : public FMassFragment
     UPROPERTY(EditAnywhere, Category = "Movement")
 	float MaxSpeed = 150.0f;
 
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float MinSpeed = 80.0f;
+
     UPROPERTY(EditAnywhere, Category = "Movement")
     float Mass = 1.0f;
 
@@ -33,5 +37,8 @@ struct CROWDFLOW_API FFlowFieldFragment : public FMassFragment
 	UFlowFieldNeiboursSubsystem* NeiboursSubsystem = nullptr;
 
 	dtPolyRef CurrentPolyRef = 0;
+
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	float DesiredSpeed = 150.f;
 
 };
